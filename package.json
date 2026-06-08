@@ -1,0 +1,14 @@
+{
+  "name": "khetchain",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix contracts && npm install --prefix backend && npm install --prefix frontend",
+    "compile": "npm run compile --prefix contracts",
+    "test:contracts": "npm run test --prefix contracts",
+    "node": "npm run node --prefix contracts",
+    "deploy:local": "npm run deploy:local --prefix contracts",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend"
+  }
+}
