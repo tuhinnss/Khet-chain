@@ -1,7 +1,7 @@
 # KhetChain
 
 Decentralized Agricultural Supply Chain & Marketplace — farmers register produce on-chain, dealers bid with ETH escrow, retailers verify provenance, and consumers scan QR codes without logging in.
-
+Check the ppt file for the proposed solution.
 ## Stack
 
 - **Contracts:** Solidity 0.8, Hardhat, OpenZeppelin AccessControl
