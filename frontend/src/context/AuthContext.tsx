@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode } from "react";
 import { User } from "../types";
 
 interface AuthContextValue {
@@ -10,18 +10,24 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    const savedToken = localStorage.getItem("khetchain_token");
+function readStoredUser(): User | null {
+  try {
     const savedUser = localStorage.getItem("khetchain_user");
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-    }
-  }, []);
+    return savedUser ? (JSON.parse(savedUser) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  // Read from localStorage synchronously during the first render (lazy
+  // initializer) rather than in a useEffect. Otherwise a ProtectedRoute
+  // mounted on the same initial render sees `user === null` and redirects
+  // to /login before the effect has a chance to hydrate the real session --
+  // so a hard refresh or direct link to a dashboard route always bounced to
+  // login, even with a valid saved session.
+  const [user, setUser] = useState<User | null>(readStoredUser);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem("khetchain_token"));
 
   const setSession = (newToken: string, newUser: User) => {
     localStorage.setItem("khetchain_token", newToken);
