@@ -69,6 +69,19 @@ em {
 }
 .muted { color: var(--text-muted); }
 
+.section-header {
+  margin-bottom: 0.5rem;
+}
+.section-header.center {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.section-header .subtitle {
+  max-width: 560px;
+}
+
 /* Navigation Bar */
 .navbar {
   display: flex;
@@ -102,8 +115,17 @@ em {
   letter-spacing: -0.02em;
 }
 
-.brand-leaf {
-  font-size: 1.4rem;
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 800;
 }
 
 .network-pill-header {
@@ -141,6 +163,12 @@ em {
   background: var(--primary-light);
   padding: 0.35rem 0.75rem;
   border-radius: var(--radius-sm);
+}
+
+/* .nav-links a's color rule otherwise wins over .btn-primary-sm by specificity,
+   making button-styled nav links render in muted text on a dark background. */
+.nav-links a.btn-primary-sm {
+  color: #ffffff;
 }
 
 /* Wallet Button */
@@ -697,6 +725,17 @@ em {
   font-weight: 600;
 }
 
+.docs-link {
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-bottom: 2.5rem;
+}
+.docs-link:hover { color: var(--primary); }
+
 .hero-stats-bar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -727,71 +766,6 @@ em {
   text-align: center;
 }
 
-/* How It Works Flow */
-.supply-chain-flow-grid {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-top: 2rem;
-  flex-wrap: wrap;
-}
-
-.flow-step-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.5rem 1rem;
-  text-align: center;
-  flex: 1;
-  min-width: 170px;
-  position: relative;
-  box-shadow: var(--shadow-sm);
-}
-.flow-step-card.consumer-step {
-  border-color: #86efac;
-  background: #f0fdf4;
-}
-
-.flow-step-number {
-  position: absolute;
-  top: -10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--primary);
-  color: #fff;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font-size: 0.75rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.flow-step-icon {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-}
-
-.flow-step-card h3 {
-  font-size: 1.1rem;
-  margin-bottom: 0.4rem;
-}
-
-.flow-step-card p {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.flow-arrow {
-  font-size: 1.5rem;
-  color: var(--accent);
-  font-weight: 800;
-}
-
 /* Features Grid */
 .features-grid {
   display: grid;
@@ -806,11 +780,6 @@ em {
   border-radius: var(--radius);
   padding: 1.75rem;
   box-shadow: var(--shadow-sm);
-}
-
-.feature-icon {
-  font-size: 2rem;
-  margin-bottom: 0.75rem;
 }
 
 .feature-card h3 {

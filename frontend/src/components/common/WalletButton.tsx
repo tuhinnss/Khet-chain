@@ -61,7 +61,7 @@ export default function WalletButton() {
           className="btn-warning-sm"
           title="Switch to Ethereum Sepolia Testnet"
         >
-          ⚠️ Switch to Sepolia
+          Switch to Sepolia
         </button>
       )}
 
@@ -81,7 +81,7 @@ export default function WalletButton() {
           disabled={loading}
           className="btn-wallet-connect"
         >
-          {loading ? "Connecting..." : "🦊 Connect MetaMask"}
+          {loading ? "Connecting..." : "Connect MetaMask"}
         </button>
       )}
     </div>

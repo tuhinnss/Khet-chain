@@ -27,7 +27,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-brand-group">
         <Link to="/" className="brand">
-          <span className="brand-leaf">🌾</span>
+          <span className="brand-mark">K</span>
           <span className="brand-name">KHETCHAIN</span>
         </Link>
         <span className="network-pill-header">Ethereum Sepolia</span>
