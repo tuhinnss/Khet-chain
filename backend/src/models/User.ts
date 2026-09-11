@@ -8,6 +8,7 @@ export interface IUser extends Document {
   role: UserRole;
   walletAddress: string;
   businessName?: string;
+  location?: string;
   isActive: boolean;
 }
 
@@ -18,11 +19,12 @@ const userSchema = new Schema<IUser>(
     name: { type: String, required: true },
     role: {
       type: String,
-      enum: ["farmer", "dealer", "retailer", "consumer", "admin"],
+      enum: ["farmer", "distributor", "wholesaler", "dealer", "retailer", "consumer", "admin"],
       required: true,
     },
     walletAddress: { type: String, required: true, lowercase: true },
     businessName: String,
+    location: String,
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

@@ -59,7 +59,7 @@ async function registerUser(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  if (!["farmer", "dealer", "retailer"].includes(role)) {
+  if (!["farmer", "distributor", "wholesaler", "dealer", "retailer"].includes(role)) {
     res.status(400).json({ success: false, error: { message: "Invalid role" } });
     return;
   }

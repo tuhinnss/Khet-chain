@@ -1,101 +1,267 @@
-import { FormEvent, useState } from "react";
-import { transferOwnership, updateStatus } from "../api/transfer.api";
-import { getHistory } from "../api/batch.api";
-import { getContract } from "../hooks/useWallet";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { getBatch, getHistory } from "../api/batch.api";
+import { addSupplyChainEvent } from "../api/supplychain.api";
+import { connectWallet, getContract, ensurePolygonAmoyNetwork } from "../hooks/useWallet";
+import { useAuth } from "../context/AuthContext";
 import QRScanner from "../components/qr/QRScanner";
+import QRGenerator from "../components/qr/QRGenerator";
 import ProvenanceTimeline from "../components/batch/ProvenanceTimeline";
-import { ProvenanceRecord } from "../types";
+import StatusBadge from "../components/common/StatusBadge";
+import TransactionBadge from "../components/common/TransactionBadge";
+import { Batch, SupplyChainEvent } from "../types";
+import { getErrorMessage } from "../utils/errors";
 
 export default function RetailerDashboard() {
+  const { user } = useAuth();
   const [batchId, setBatchId] = useState("");
-  const [newOwner, setNewOwner] = useState("");
-  const [history, setHistory] = useState<ProvenanceRecord[]>([]);
+  const [batch, setBatch] = useState<Batch | null>(null);
+  const [events, setEvents] = useState<SupplyChainEvent[]>([]);
   const [msg, setMsg] = useState("");
+  const [latestTxHash, setLatestTxHash] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function verifyBatch(id: number) {
-    const data = await getHistory(id);
-    setHistory(data.history ?? []);
-    setBatchId(String(id));
-    setMsg(`Loaded provenance for batch #${id}`);
+  // Retailer Final Inspection Form
+  const [shelfForm, setShelfForm] = useState({
+    action: "RETAIL_READY",
+    quality: "GOOD",
+    finalPrice: "28",
+    storeLocation: "FreshDirect Supermarket, Bandra West, Mumbai",
+    shelfDetails: "Misted Organic Produce Display Aisle 2",
+  });
+
+  async function loadBatch(idToLoad?: number) {
+    const id = idToLoad || Number(batchId);
+    if (!id) return;
+    setLoading(true);
+    setMsg("");
+    try {
+      const b = await getBatch(id);
+      setBatch(b);
+      const h = await getHistory(id).catch(() => ({ supplyChainEvents: [] }));
+      setEvents(h.supplyChainEvents || b.supplyChainEvents || []);
+      setMsg(`Loaded Batch #${id} (${b.cropName})`);
+    } catch (err) {
+      setMsg(getErrorMessage(err, "Failed to load batch"));
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleScan(data: string) {
     try {
       const parsed = JSON.parse(data);
-      verifyBatch(parsed.batchId);
+      setBatchId(String(parsed.batchId));
+      loadBatch(parsed.batchId);
     } catch {
       const match = data.match(/(\d+)/);
-      if (match) verifyBatch(Number(match[1]));
+      if (match) {
+        setBatchId(match[1]);
+        loadBatch(Number(match[1]));
+      }
     }
   }
 
-  async function handleTransfer(e: FormEvent) {
+  async function markRetailReady(e: React.FormEvent) {
     e.preventDefault();
-    const id = Number(batchId);
-    try {
-      const contract = await getContract();
-      const tx = await contract.transferOwnership(id, newOwner);
-      const receipt = await tx.wait();
-      await transferOwnership({ batchId: id, newOwner, txHash: receipt.hash, toRole: "retailer" });
-      setMsg("Ownership transferred on-chain");
-      await verifyBatch(id);
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Transfer failed");
-    }
-  }
+    if (!batch) return;
+    setLoading(true);
+    setMsg("");
+    setLatestTxHash("");
 
-  async function markRetailReady() {
-    const id = Number(batchId);
     try {
+      await ensurePolygonAmoyNetwork();
+      await connectWallet();
       const contract = await getContract();
-      const tx = await contract.updateStatus(id, 6);
-      const receipt = await tx.wait();
-      await updateStatus({ batchId: id, status: "RetailReady", txHash: receipt.hash });
-      setMsg("Batch marked Retail Ready");
-      await verifyBatch(id);
+
+      const onChainEvent = {
+        actor: user?.walletAddress || "",
+        actorRole: "RETAILER",
+        action: "RETAIL_READY",
+        price: shelfForm.finalPrice ? BigInt(shelfForm.finalPrice) : 0n,
+        quantity: batch.quantity,
+        location: shelfForm.storeLocation,
+        quality: shelfForm.quality,
+        transportDetails: "Store shelf arrival & shelf-life inspection",
+        storageDetails: shelfForm.shelfDetails,
+        timestamp: Math.floor(Date.now() / 1000),
+        metadataURI: "",
+      };
+
+      // 1. Record final retail event
+      const eventTx = await contract.addSupplyChainEvent(batch.batchId, onChainEvent);
+      setMsg("Recording retail receipt on Polygon Amoy...");
+      const eventReceipt = await eventTx.wait();
+      setLatestTxHash(eventReceipt.hash);
+
+      // 2. Update status to RetailReady (enum 6)
+      const statusTx = await contract.updateStatus(batch.batchId, 6);
+      await statusTx.wait();
+
+      await addSupplyChainEvent({
+        batchId: batch.batchId,
+        txHash: eventReceipt.hash,
+        actorRole: "RETAILER",
+        action: "RETAIL_READY",
+        price: shelfForm.finalPrice,
+        location: shelfForm.storeLocation,
+        quality: shelfForm.quality,
+        storageDetails: shelfForm.shelfDetails,
+      }).catch(() => {});
+
+      setMsg(`Batch #${batch.batchId} marked Retail Ready on Polygon Amoy! QR code active.`);
+      loadBatch(batch.batchId);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Status update failed");
+      setMsg(getErrorMessage(err, "Failed to update retail status"));
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div className="page">
+    <div className="page retailer-page">
       <header className="page-header">
-        <h1>Retailer Dashboard</h1>
-        <p className="subtitle">Receive produce, verify provenance, update ownership</p>
+        <div>
+          <span className="badge-role">RETAILER DASHBOARD</span>
+          <h1>Store Receipt, QR Generation & Consumer Verification</h1>
+          <p className="subtitle">Accept wholesale produce, perform final shelf inspections, and generate print-ready consumer QR codes</p>
+        </div>
       </header>
 
-      {msg && <div className="alert">{msg}</div>}
+      {msg && (
+        <div className={`alert ${msg.includes("failed") ? "error" : "success"}`}>
+          {msg}
+          {latestTxHash && <TransactionBadge txHash={latestTxHash} label="Tx Hash" />}
+        </div>
+      )}
 
+      {/* Batch Lookup & QR Scan */}
       <section className="card">
-        <h2>Scan Batch QR</h2>
-        <QRScanner onScan={handleScan} />
-        <div className="inline-form" style={{ marginTop: "1rem" }}>
-          <input placeholder="Batch ID" value={batchId} onChange={(e) => setBatchId(e.target.value)} />
-          <button onClick={() => verifyBatch(Number(batchId))} className="btn-secondary">Load History</button>
+        <h2>🔍 Scan or Enter Received Produce Batch</h2>
+        <div className="search-batch-row">
+          <input
+            placeholder="Enter Batch ID (e.g. 1)"
+            value={batchId}
+            onChange={(e) => setBatchId(e.target.value)}
+            className="search-input"
+          />
+          <button type="button" onClick={() => loadBatch()} className="btn-primary">
+            Load Produce Record
+          </button>
+        </div>
+
+        <div style={{ marginTop: "1rem" }}>
+          <h4>Or Scan Incoming Crate QR:</h4>
+          <QRScanner onScan={handleScan} />
         </div>
       </section>
 
-      {history.length > 0 && (
-        <section className="card">
-          <h2>Provenance Timeline</h2>
-          <ProvenanceTimeline history={history} />
-        </section>
-      )}
+      {batch && (
+        <>
+          {/* Produce Details & Status */}
+          <section className="card">
+            <div className="batch-card-header">
+              <div>
+                <h2>{batch.cropName}</h2>
+                <p className="subtitle">Batch #{batch.batchId} ({batch.batchStringId || `KHC-2026-${String(batch.batchId).padStart(6, "0")}`})</p>
+              </div>
+              <StatusBadge status={batch.status} />
+            </div>
 
-      <section className="card">
-        <h2>Transfer Ownership</h2>
-        <form onSubmit={handleTransfer} className="form">
-          <label>
-            New owner wallet
-            <input value={newOwner} onChange={(e) => setNewOwner(e.target.value)} required />
-          </label>
-          <button type="submit" className="btn-primary">Transfer on Blockchain</button>
-        </form>
-        <button onClick={markRetailReady} className="btn-secondary" style={{ marginTop: "1rem" }}>
-          Mark Retail Ready
-        </button>
-      </section>
+            <div className="produce-meta-grid" style={{ marginTop: "1rem" }}>
+              <div className="meta-box">
+                <span className="meta-label">Origin Farm</span>
+                <span className="meta-value">📍 {batch.location}</span>
+              </div>
+              <div className="meta-box">
+                <span className="meta-label">Batch Size</span>
+                <span className="meta-value">{batch.quantity} {batch.unit || "kg"}</span>
+              </div>
+              <div className="meta-box">
+                <span className="meta-label">Certification</span>
+                <span className="meta-value">🌱 {batch.certification || "Standard"}</span>
+              </div>
+              <div className="meta-box">
+                <span className="meta-label">Farmer Wallet</span>
+                <span className="meta-value"><code>{batch.farmerAddress.slice(0, 8)}...</code></span>
+              </div>
+            </div>
+          </section>
+
+          {/* Core Feature: Retail QR Code Generator */}
+          <section className="card qr-retailer-section">
+            <div className="section-header">
+              <h2>📱 Consumer Traceability QR Code</h2>
+              <p className="subtitle">
+                Print this QR code sticker for customer packaging, retail shelves, or vegetable crates.
+              </p>
+            </div>
+
+            <QRGenerator
+              batchId={batch.batchId}
+              batchStringId={batch.batchStringId}
+              cropName={batch.cropName}
+              showDetails={true}
+            />
+          </section>
+
+          {/* Final Shelf Inspection Form */}
+          <section className="card">
+            <h3>🛒 Final Quality Inspection & Shelf Activation</h3>
+            <form onSubmit={markRetailReady} className="form">
+              <div className="form-row grid-2">
+                <label>
+                  Final Quality Grade
+                  <select
+                    value={shelfForm.quality}
+                    onChange={(e) => setShelfForm({ ...shelfForm, quality: e.target.value })}
+                  >
+                    <option value="GOOD">GOOD (Fresh / Prime Retail Quality)</option>
+                    <option value="MEDIUM">MEDIUM (Standard Consumer Grade)</option>
+                    <option value="BAD">BAD (Reject / Do not display)</option>
+                  </select>
+                </label>
+                <label>
+                  Final Consumer Retail Price (₹ per unit) *
+                  <input
+                    type="number"
+                    value={shelfForm.finalPrice}
+                    onChange={(e) => setShelfForm({ ...shelfForm, finalPrice: e.target.value })}
+                    required
+                  />
+                </label>
+              </div>
+
+              <label>
+                Supermarket Store Location *
+                <input
+                  value={shelfForm.storeLocation}
+                  onChange={(e) => setShelfForm({ ...shelfForm, storeLocation: e.target.value })}
+                  required
+                />
+              </label>
+
+              <label>
+                Display / Shelf Placement Details
+                <input
+                  value={shelfForm.shelfDetails}
+                  onChange={(e) => setShelfForm({ ...shelfForm, shelfDetails: e.target.value })}
+                />
+              </label>
+
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? "Activating on Polygon Amoy..." : "✅ Mark Retail Ready & Publish to Consumers"}
+              </button>
+            </form>
+          </section>
+
+          {/* Complete Provenance Timeline */}
+          <section className="card">
+            <h2>📜 Full Supply Chain Verification History</h2>
+            <ProvenanceTimeline events={events} />
+          </section>
+        </>
+      )}
     </div>
   );
 }

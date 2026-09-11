@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getNonce, login } from "../api/auth.api";
 import { useAuth } from "../context/AuthContext";
-import { connectWallet, signMessage } from "../hooks/useWallet";
+import { connectWallet, signMessage, ensurePolygonAmoyNetwork } from "../hooks/useWallet";
 import { getErrorMessage } from "../utils/errors";
 
 export default function Login() {
@@ -18,12 +18,18 @@ export default function Login() {
     setLoading(true);
     setError("");
     try {
+      await ensurePolygonAmoyNetwork();
       const walletAddress = await connectWallet();
       const { message } = await getNonce(walletAddress);
       const signature = await signMessage(message);
       const { token, user } = await login({ email, password, walletAddress, signature, message });
       setSession(token, user);
-      navigate(user.role === "farmer" ? "/farmer" : user.role === "dealer" ? "/dealer" : "/retailer");
+
+      if (user.role === "farmer") navigate("/farmer");
+      else if (user.role === "distributor" || user.role === "dealer") navigate("/distributor");
+      else if (user.role === "wholesaler") navigate("/wholesaler");
+      else if (user.role === "retailer") navigate("/retailer");
+      else navigate("/");
     } catch (err) {
       setError(getErrorMessage(err, "Login failed"));
     } finally {
@@ -34,24 +40,41 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Welcome back</h1>
-        <p className="subtitle">Sign in with email + MetaMask message signature. Your on-chain role is synced automatically on login.</p>
+        <h1>Welcome Back to KHETCHAIN</h1>
+        <p className="subtitle">
+          Sign in with your email and sign the authentication message in MetaMask
+        </p>
+
         <form onSubmit={handleSubmit} className="form">
           <label>
-            Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            Email Address *
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@farm.com"
+              required
+            />
           </label>
           <label>
-            Password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            Password *
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </label>
+
           {error && <p className="error-text">{error}</p>}
+
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Connecting MetaMask…" : "Login with MetaMask"}
+            {loading ? "Authenticating with MetaMask..." : "🦊 Sign In with MetaMask"}
           </button>
         </form>
+
         <p className="auth-footer">
-          New here? <Link to="/register">Create account</Link>
+          Don't have an account yet? <Link to="/register">Create Account</Link>
         </p>
       </div>
     </div>

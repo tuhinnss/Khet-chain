@@ -1,4 +1,11 @@
-export type UserRole = "farmer" | "dealer" | "retailer" | "admin";
+export type UserRole =
+  | "farmer"
+  | "distributor"
+  | "wholesaler"
+  | "dealer"
+  | "retailer"
+  | "consumer"
+  | "admin";
 
 export interface User {
   id: string;
@@ -6,6 +13,8 @@ export interface User {
   name: string;
   role: UserRole;
   walletAddress: string;
+  businessName?: string;
+  location?: string;
 }
 
 export type BatchStatus =
@@ -15,16 +24,35 @@ export type BatchStatus =
   | "Sold"
   | "InTransit"
   | "Delivered"
-  | "RetailReady";
+  | "RetailReady"
+  | "Completed";
+
+export interface SupplyChainEvent {
+  actor: string;
+  actorRole: string;
+  action: string;
+  price: string;
+  quantity: number;
+  location: string;
+  quality: string;
+  transportDetails: string;
+  storageDetails: string;
+  timestamp: string | number | Date;
+  metadataURI?: string;
+  txHash?: string;
+}
 
 export interface Batch {
   _id?: string;
   batchId: number;
+  batchStringId?: string;
   cropName: string;
   quantity: number;
   unit?: string;
   harvestDate: string;
   location: string;
+  certification?: string;
+  description?: string;
   farmerAddress: string;
   currentOwner: string;
   currentPrice?: string;
@@ -32,6 +60,8 @@ export interface Batch {
   qrHash: string;
   qrCodeDataUrl?: string;
   verificationUrl?: string;
+  supplyChainEvents?: SupplyChainEvent[];
+  history?: SupplyChainEvent[];
 }
 
 export interface Listing {
@@ -49,4 +79,15 @@ export interface ProvenanceRecord {
   status: BatchStatus;
   timestamp: string;
   action: string;
+}
+
+export interface FairPriceCrop {
+  cropName: string;
+  category: string;
+  currentSupplyChainPrice: number;
+  referenceMSP: number;
+  unit: string;
+  priceDifference: number;
+  trend: "stable" | "increasing" | "decreasing";
+  lastUpdated: string;
 }

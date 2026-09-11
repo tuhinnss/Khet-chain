@@ -3,6 +3,8 @@ import { UserRole } from "../types/index.js";
 
 const roleToOnChain: Record<string, string> = {
   farmer: ROLE_HASHES.FARMER,
+  distributor: ROLE_HASHES.DISTRIBUTOR,
+  wholesaler: ROLE_HASHES.WHOLESALER,
   dealer: ROLE_HASHES.DEALER,
   retailer: ROLE_HASHES.RETAILER,
 };
@@ -40,7 +42,7 @@ export async function ensureOnChainRole(
     if (!code || code === "0x") {
       return {
         granted: false,
-        error: "Contract not deployed. Run: cd contracts && npm run deploy:local",
+        error: "Contract not deployed. Run: cd contracts && npm run deploy:local or npm run deploy:amoy",
       };
     }
 

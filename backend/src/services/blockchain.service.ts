@@ -1,22 +1,64 @@
 import { ethers } from "ethers";
 import { getContract, provider } from "../config/blockchain.js";
-import { BATCH_STATUS_MAP } from "../types/index.js";
+import { BATCH_STATUS_MAP, SupplyChainEventData } from "../types/index.js";
 
 export async function readBatch(batchId: number) {
   const contract = getContract();
   const batch = await contract.getBatch(batchId);
   return {
     batchId: Number(batch.batchId),
+    batchStringId: batch.batchStringId || `KHC-2026-${String(batch.batchId).padStart(6, "0")}`,
     cropName: batch.cropName,
     quantity: Number(batch.quantity),
+    unit: batch.unit || "kg",
     harvestDate: Number(batch.harvestDate),
     location: batch.location,
+    certification: batch.certification || "Standard",
+    description: batch.description || "",
     farmerAddress: batch.farmerAddress,
     currentOwner: batch.currentOwner,
     currentPrice: batch.currentPrice.toString(),
     status: BATCH_STATUS_MAP[Number(batch.status)] ?? "Created",
     qrHash: batch.qrHash,
+    createdAt: Number(batch.createdAt || 0),
+    active: batch.active !== undefined ? batch.active : true,
   };
+}
+
+export async function readSupplyChainEvents(batchId: number): Promise<SupplyChainEventData[]> {
+  const contract = getContract();
+  try {
+    const events = await contract.getSupplyChainEvents(batchId);
+    return events.map((record: {
+      actor: string;
+      actorRole: string;
+      action: string;
+      price: bigint;
+      quantity: bigint;
+      location: string;
+      quality: string;
+      transportDetails: string;
+      storageDetails: string;
+      timestamp: bigint;
+      metadataURI: string;
+    }) => ({
+      batchId,
+      actor: record.actor,
+      actorRole: record.actorRole,
+      action: record.action,
+      price: record.price.toString(),
+      quantity: Number(record.quantity),
+      location: record.location,
+      quality: record.quality || "GOOD",
+      transportDetails: record.transportDetails,
+      storageDetails: record.storageDetails,
+      timestamp: new Date(Number(record.timestamp) * 1000),
+      metadataURI: record.metadataURI,
+    }));
+  } catch (err) {
+    console.warn(`Could not read on-chain supply chain events for batch #${batchId}:`, err);
+    return [];
+  }
 }
 
 export async function readBatchHistory(batchId: number) {
@@ -61,8 +103,10 @@ export async function verifyOnChain(batchId: number, scannedHash: string) {
     authentic,
     batch: {
       batchId: Number(batch.batchId),
+      batchStringId: batch.batchStringId || `KHC-2026-${String(batch.batchId).padStart(6, "0")}`,
       cropName: batch.cropName,
       quantity: Number(batch.quantity),
+      unit: batch.unit || "kg",
       currentOwner: batch.currentOwner,
       status: BATCH_STATUS_MAP[Number(batch.status)] ?? "Created",
       qrHash: batch.qrHash,

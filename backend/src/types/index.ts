@@ -1,6 +1,13 @@
 import { Request } from "express";
 
-export type UserRole = "farmer" | "dealer" | "retailer" | "consumer" | "admin";
+export type UserRole =
+  | "farmer"
+  | "distributor"
+  | "wholesaler"
+  | "dealer"
+  | "retailer"
+  | "consumer"
+  | "admin";
 
 export type BatchStatus =
   | "Created"
@@ -9,7 +16,8 @@ export type BatchStatus =
   | "Sold"
   | "InTransit"
   | "Delivered"
-  | "RetailReady";
+  | "RetailReady"
+  | "Completed";
 
 export interface AuthPayload {
   userId: string;
@@ -22,6 +30,23 @@ export interface AuthRequest extends Request {
   user?: AuthPayload;
 }
 
+export interface SupplyChainEventData {
+  batchId: number;
+  actor: string;
+  actorRole: string;
+  action: string;
+  price: string;
+  quantity: number;
+  location: string;
+  quality: string;
+  transportDetails: string;
+  storageDetails: string;
+  timestamp: Date | string;
+  metadataURI?: string;
+  txHash?: string;
+  blockNumber?: number;
+}
+
 export const BATCH_STATUS_MAP: Record<number, BatchStatus> = {
   0: "Created",
   1: "Listed",
@@ -30,6 +55,7 @@ export const BATCH_STATUS_MAP: Record<number, BatchStatus> = {
   4: "InTransit",
   5: "Delivered",
   6: "RetailReady",
+  7: "Completed",
 };
 
 export const BATCH_STATUS_TO_ENUM: Record<BatchStatus, number> = {
@@ -40,4 +66,5 @@ export const BATCH_STATUS_TO_ENUM: Record<BatchStatus, number> = {
   InTransit: 4,
   Delivered: 5,
   RetailReady: 6,
+  Completed: 7,
 };

@@ -29,5 +29,7 @@ export const ROLE_HASHES = {
   FARMER: ethers.keccak256(ethers.toUtf8Bytes("FARMER_ROLE")),
   DEALER: ethers.keccak256(ethers.toUtf8Bytes("DEALER_ROLE")),
   RETAILER: ethers.keccak256(ethers.toUtf8Bytes("RETAILER_ROLE")),
+  DISTRIBUTOR: ethers.keccak256(ethers.toUtf8Bytes("DISTRIBUTOR_ROLE")),
+  WHOLESALER: ethers.keccak256(ethers.toUtf8Bytes("WHOLESALER_ROLE")),
   ADMIN: ethers.keccak256(ethers.toUtf8Bytes("ADMIN_ROLE")),
 };

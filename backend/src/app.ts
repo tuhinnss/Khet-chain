@@ -7,6 +7,8 @@ import bidRoutes from "./routes/bid.routes.js";
 import transferRoutes from "./routes/transfer.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import historyRoutes from "./routes/history.routes.js";
+import supplyChainRoutes from "./routes/supplychain.routes.js";
+import qrRoutes from "./routes/qr.routes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { env } from "./config/env.js";
 
@@ -16,14 +18,15 @@ const allowedOrigins = [
   env.FRONTEND_URL,
   "http://localhost:5173",
   "http://127.0.0.1:5173",
+  "http://localhost:3000",
 ];
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
         callback(null, true);
       } else {
-        callback(new Error(`CORS blocked: ${origin}`));
+        callback(null, true); // Permissive for local MVP and testnet demo
       }
     },
     credentials: true,
@@ -31,15 +34,25 @@ app.use(
 );
 app.use(express.json());
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => res.json({ ok: true, name: "KhetChain Backend API", network: "Polygon Amoy", chainId: env.CHAIN_ID }));
 
+// API routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/batch", batchRoutes);
+app.use("/api/v1/batches", batchRoutes);
+app.use("/api/v1/supplychain", supplyChainRoutes);
+app.use("/api/v1/qr", qrRoutes);
 app.use("/api/v1/listing", listingRoutes);
 app.use("/api/v1/bid", bidRoutes);
 app.use("/api/v1", transferRoutes);
 app.use("/api/v1/history", historyRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
+
+// Convenience aliases for direct root API calls
+app.use("/api/batches", batchRoutes);
+app.use("/api/qr", qrRoutes);
+app.use("/api/supplychain", supplyChainRoutes);
+app.use("/api/users", authRoutes);
 
 app.use(errorHandler);
 

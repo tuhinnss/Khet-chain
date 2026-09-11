@@ -2,28 +2,18 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import Navbar from "./components/common/Navbar";
 import ProtectedRoute from "./components/common/ProtectedRoute";
+import LandingPage from "./pages/LandingPage";
+import TracePage from "./pages/TracePage";
+import FairPricePage from "./pages/FairPricePage";
+import FarmerDashboard from "./pages/FarmerDashboard";
+import DistributorDashboard from "./pages/DistributorDashboard";
+import WholesalerDashboard from "./pages/WholesalerDashboard";
+import RetailerDashboard from "./pages/RetailerDashboard";
+import Marketplace from "./pages/Marketplace";
+import BatchDetails from "./pages/BatchDetails";
+import BidManagement from "./pages/BidManagement";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import FarmerDashboard from "./pages/FarmerDashboard";
-import DealerDashboard from "./pages/DealerDashboard";
-import RetailerDashboard from "./pages/RetailerDashboard";
-import ConsumerVerify from "./pages/ConsumerVerify";
-import BatchDetails from "./pages/BatchDetails";
-import Marketplace from "./pages/Marketplace";
-import BidManagement from "./pages/BidManagement";
-
-function Home() {
-  return (
-    <div className="hero">
-      <h1>Transparent agriculture,<br /><em>from farm to fork</em></h1>
-      <p>Register produce on-chain, trade through dealers and retailers, and let consumers verify every step with a QR scan.</p>
-      <div className="hero-actions">
-        <a href="/register" className="btn-primary">Get Started</a>
-        <a href="/verify" className="btn-secondary">Verify Produce</a>
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   return (
@@ -32,17 +22,69 @@ export default function App() {
         <Navbar />
         <main>
           <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/verify" element={<ConsumerVerify />} />
-            <Route path="/verify/:batchId" element={<ConsumerVerify />} />
+            {/* Public Consumer Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/trace/:batchId" element={<TracePage />} />
+            <Route path="/trace" element={<TracePage />} />
+            <Route path="/verify/:batchId" element={<TracePage />} />
+            <Route path="/verify" element={<TracePage />} />
+            <Route path="/fair-price" element={<FairPricePage />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/batch/:id" element={<BatchDetails />} />
-            <Route path="/farmer" element={<ProtectedRoute roles={["farmer"]}><FarmerDashboard /></ProtectedRoute>} />
-            <Route path="/dealer" element={<ProtectedRoute roles={["dealer"]}><DealerDashboard /></ProtectedRoute>} />
-            <Route path="/retailer" element={<ProtectedRoute roles={["retailer"]}><RetailerDashboard /></ProtectedRoute>} />
-            <Route path="/bids" element={<ProtectedRoute roles={["farmer"]}><BidManagement /></ProtectedRoute>} />
+
+            {/* Auth Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+
+            {/* Role-Protected Supply Chain Actor Dashboards */}
+            <Route
+              path="/farmer"
+              element={
+                <ProtectedRoute roles={["farmer"]}>
+                  <FarmerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/distributor"
+              element={
+                <ProtectedRoute roles={["distributor", "dealer"]}>
+                  <DistributorDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dealer"
+              element={
+                <ProtectedRoute roles={["dealer", "distributor"]}>
+                  <DistributorDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/wholesaler"
+              element={
+                <ProtectedRoute roles={["wholesaler"]}>
+                  <WholesalerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/retailer"
+              element={
+                <ProtectedRoute roles={["retailer"]}>
+                  <RetailerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bids"
+              element={
+                <ProtectedRoute roles={["farmer"]}>
+                  <BidManagement />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </main>
       </BrowserRouter>

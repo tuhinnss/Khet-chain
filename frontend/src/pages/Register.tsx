@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getNonce, register } from "../api/auth.api";
 import { useAuth } from "../context/AuthContext";
-import { connectWallet, signMessage } from "../hooks/useWallet";
+import { connectWallet, signMessage, ensurePolygonAmoyNetwork } from "../hooks/useWallet";
 import { UserRole } from "../types";
 import { getErrorMessage } from "../utils/errors";
 
@@ -24,6 +24,7 @@ export default function Register() {
     setLoading(true);
     setError("");
     try {
+      await ensurePolygonAmoyNetwork();
       const walletAddress = await connectWallet();
       const { message } = await getNonce(walletAddress);
       const signature = await signMessage(message);
@@ -38,7 +39,13 @@ export default function Register() {
         message,
       });
       setSession(token, user);
-      navigate(user.role === "farmer" ? "/farmer" : user.role === "dealer" ? "/dealer" : "/retailer");
+
+      // Route by role
+      if (user.role === "farmer") navigate("/farmer");
+      else if (user.role === "distributor" || user.role === "dealer") navigate("/distributor");
+      else if (user.role === "wholesaler") navigate("/wholesaler");
+      else if (user.role === "retailer") navigate("/retailer");
+      else navigate("/");
     } catch (err) {
       setError(getErrorMessage(err, "Registration failed"));
     } finally {
@@ -49,43 +56,70 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Join KhetChain</h1>
-        <p className="subtitle">Create your account — MetaMask will ask you to <strong>sign a message only</strong> (free, no gas)</p>
-        <p className="error-text" style={{ marginBottom: "1rem" }}>
-          If MetaMask shows a <strong>transaction</strong> called <code>grantUserRole</code>, reject it. That is not part of signup. On-chain roles are granted automatically when you <strong>log in</strong>.
+        <h1>Join KHETCHAIN</h1>
+        <p className="subtitle">
+          Connect MetaMask and select your role in the farm-to-consumer agricultural supply chain
         </p>
+
         <form onSubmit={handleSubmit} className="form">
           <label>
-            Name
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            Full Name / Contact Person *
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g. Ramu Sharma"
+              required
+            />
           </label>
           <label>
-            Email
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+            Email Address *
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="name@farm.com"
+              required
+            />
           </label>
           <label>
-            Password
-            <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+            Password *
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+            />
           </label>
           <label>
-            Role
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}>
-              <option value="farmer">Farmer</option>
-              <option value="dealer">Dealer</option>
-              <option value="retailer">Retailer</option>
+            Supply Chain Actor Role *
+            <select
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+            >
+              <option value="farmer">🌱 Farmer / Producer</option>
+              <option value="distributor">🚛 Distributor / Logistics Trader</option>
+              <option value="wholesaler">🏪 Wholesaler / Mandi Operator</option>
+              <option value="retailer">🛒 Retailer / Supermarket</option>
             </select>
           </label>
           <label>
-            Business name (optional)
-            <input value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} />
+            Business / Farm / Store Name (optional)
+            <input
+              value={form.businessName}
+              onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+              placeholder="e.g. Assam Organic Producers FPO"
+            />
           </label>
+
           {error && <p className="error-text">{error}</p>}
+
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Waiting for MetaMask…" : "Sign message & register"}
+            {loading ? "Signing with MetaMask..." : "🦊 Connect Wallet & Register"}
           </button>
         </form>
+
         <p className="auth-footer">
-          Already have an account? <Link to="/login">Login</Link>
+          Already have an account? <Link to="/login">Login with Wallet</Link>
         </p>
       </div>
     </div>
