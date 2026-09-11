@@ -34,7 +34,20 @@ app.use(
 );
 app.use(express.json());
 
-app.get("/health", (_req, res) => res.json({ ok: true, name: "KhetChain Backend API", network: "Polygon Amoy", chainId: env.CHAIN_ID }));
+const NETWORK_NAMES: Record<number, string> = {
+  11155111: "Ethereum Sepolia",
+  80002: "Polygon Amoy",
+  31337: "Hardhat Local",
+};
+
+app.get("/health", (_req, res) =>
+  res.json({
+    ok: true,
+    name: "KhetChain Backend API",
+    network: NETWORK_NAMES[env.CHAIN_ID] || `Chain ${env.CHAIN_ID}`,
+    chainId: env.CHAIN_ID,
+  })
+);
 
 // API routes
 app.use("/api/v1/auth", authRoutes);

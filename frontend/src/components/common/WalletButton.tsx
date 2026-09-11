@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { connectWallet, getConnectedNetwork, ensurePolygonAmoyNetwork } from "../../hooks/useWallet";
+import { connectWallet, getConnectedNetwork, ensureSepoliaNetwork } from "../../hooks/useWallet";
 import { CHAIN_ID } from "../../utils/constants";
 
 export default function WalletButton() {
@@ -50,25 +50,25 @@ export default function WalletButton() {
     }
   }
 
-  const isWrongNetwork = account && network.chainId !== 0 && network.chainId !== CHAIN_ID && network.chainId !== 80002;
+  const isWrongNetwork = account && network.chainId !== 0 && network.chainId !== CHAIN_ID && network.chainId !== 11155111;
 
   return (
     <div className="wallet-button-wrapper">
       {isWrongNetwork && (
         <button
           type="button"
-          onClick={ensurePolygonAmoyNetwork}
+          onClick={ensureSepoliaNetwork}
           className="btn-warning-sm"
-          title="Switch to Polygon Amoy Testnet"
+          title="Switch to Ethereum Sepolia Testnet"
         >
-          ⚠️ Switch to Amoy
+          ⚠️ Switch to Sepolia
         </button>
       )}
 
       {account ? (
         <div className="wallet-connected-pill">
-          <span className="network-indicator" title={network.name || "Polygon Amoy"}>
-            ● {network.chainId === 80002 || network.chainId === CHAIN_ID ? "Amoy" : "Network"}
+          <span className="network-indicator" title={network.name || "Ethereum Sepolia"}>
+            ● {network.chainId === 11155111 || network.chainId === CHAIN_ID ? "Sepolia" : "Network"}
           </span>
           <span className="wallet-addr-text">
             {account.slice(0, 6)}...{account.slice(-4)}

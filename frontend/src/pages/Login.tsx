@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getNonce, login } from "../api/auth.api";
 import { useAuth } from "../context/AuthContext";
-import { connectWallet, signMessage, ensurePolygonAmoyNetwork } from "../hooks/useWallet";
+import { connectWallet, signMessage, ensureSepoliaNetwork } from "../hooks/useWallet";
 import { getErrorMessage } from "../utils/errors";
 
 export default function Login() {
@@ -18,7 +18,7 @@ export default function Login() {
     setLoading(true);
     setError("");
     try {
-      await ensurePolygonAmoyNetwork();
+      await ensureSepoliaNetwork();
       const walletAddress = await connectWallet();
       const { message } = await getNonce(walletAddress);
       const signature = await signMessage(message);

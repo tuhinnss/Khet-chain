@@ -5,7 +5,7 @@ import { getDashboardStats, getBatch } from "../api/batch.api";
 import { getListings } from "../api/listing.api";
 import { placeBid } from "../api/bid.api";
 import { addSupplyChainEvent } from "../api/supplychain.api";
-import { connectWallet, getContract, ensurePolygonAmoyNetwork } from "../hooks/useWallet";
+import { connectWallet, getContract, ensureSepoliaNetwork } from "../hooks/useWallet";
 import { syncRole, getRoleStatus } from "../api/auth.api";
 import { useAuth } from "../context/AuthContext";
 import StatusBadge from "../components/common/StatusBadge";
@@ -89,7 +89,7 @@ export default function DistributorDashboard() {
     setLoading(true);
     setMsg("");
     try {
-      await ensurePolygonAmoyNetwork();
+      await ensureSepoliaNetwork();
       const contract = await getContract();
       const tx = await contract.placeBid(batchId, { value: parseEther(amount) });
       const receipt = await tx.wait();
@@ -112,7 +112,7 @@ export default function DistributorDashboard() {
     setLatestTxHash("");
 
     try {
-      await ensurePolygonAmoyNetwork();
+      await ensureSepoliaNetwork();
       const contract = await getContract();
 
       const onChainEvent = {
@@ -130,7 +130,7 @@ export default function DistributorDashboard() {
       };
 
       const tx = await contract.addSupplyChainEvent(selectedBatch.batchId, onChainEvent);
-      setMsg("Recording supply chain event on Polygon Amoy...");
+      setMsg("Recording supply chain event on Ethereum Sepolia...");
       const receipt = await tx.wait();
       setLatestTxHash(receipt.hash);
 
@@ -147,7 +147,7 @@ export default function DistributorDashboard() {
         storageDetails: eventForm.storageDetails,
       }).catch(() => {});
 
-      setMsg(`Supply chain event [${eventForm.action}] successfully recorded on Polygon Amoy!`);
+      setMsg(`Supply chain event [${eventForm.action}] successfully recorded on Ethereum Sepolia!`);
       handleSearchBatch(selectedBatch.batchId);
     } catch (err) {
       setMsg(getErrorMessage(err, "Event recording failed"));
@@ -163,7 +163,7 @@ export default function DistributorDashboard() {
     setMsg("");
 
     try {
-      await ensurePolygonAmoyNetwork();
+      await ensureSepoliaNetwork();
       const contract = await getContract();
 
       const tx = await contract["transferOwnership(uint256,address,string,string,string,string,string,uint256)"](
@@ -177,7 +177,7 @@ export default function DistributorDashboard() {
         transferForm.price ? BigInt(transferForm.price) : 0n
       );
 
-      setMsg("Transferring batch custody on Polygon Amoy...");
+      setMsg("Transferring batch custody on Ethereum Sepolia...");
       const receipt = await tx.wait();
       setLatestTxHash(receipt.hash);
 
@@ -337,7 +337,7 @@ export default function DistributorDashboard() {
               </label>
 
               <button type="submit" className="btn-primary" disabled={loading}>
-                {loading ? "Logging Event on Amoy..." : "⛓️ Record Checkpoint On-Chain"}
+                {loading ? "Logging Event on Sepolia..." : "⛓️ Record Checkpoint On-Chain"}
               </button>
             </form>
           </section>

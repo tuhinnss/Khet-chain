@@ -5,7 +5,7 @@ import { getDashboardStats, syncBatch, listBatches } from "../api/batch.api";
 import { createListing } from "../api/listing.api";
 import { getBids, acceptBid } from "../api/bid.api";
 import { useAuth } from "../context/AuthContext";
-import { connectWallet, computeQrHash, getContract, ensurePolygonAmoyNetwork } from "../hooks/useWallet";
+import { connectWallet, computeQrHash, getContract, ensureSepoliaNetwork } from "../hooks/useWallet";
 import { syncRole, getRoleStatus } from "../api/auth.api";
 import StatusBadge from "../components/common/StatusBadge";
 import TransactionBadge from "../components/common/TransactionBadge";
@@ -45,7 +45,7 @@ export default function FarmerDashboard() {
   }, []);
 
   async function verifyWallet(): Promise<string> {
-    await ensurePolygonAmoyNetwork();
+    await ensureSepoliaNetwork();
     const wallet = await connectWallet();
     setConnectedWallet(wallet);
     return wallet;
@@ -72,7 +72,7 @@ export default function FarmerDashboard() {
       const nextId = Number(counter) + 1;
       const qrHash = computeQrHash(nextId, form.cropName, user?.walletAddress || connectedWallet);
 
-      // On-Chain Transaction on Polygon Amoy
+      // On-Chain Transaction on Ethereum Sepolia
       const tx = await contract["registerBatch(string,uint256,string,uint256,string,string,string,uint256,bytes32)"](
         form.cropName,
         Number(form.quantity),
@@ -85,7 +85,7 @@ export default function FarmerDashboard() {
         qrHash
       );
 
-      setMsg("Transaction submitted to Polygon Amoy! Waiting for block confirmation...");
+      setMsg("Transaction submitted to Ethereum Sepolia! Waiting for block confirmation...");
       const receipt = await tx.wait();
       setLatestTxHash(receipt.hash);
       setLatestBatchId(nextId);
@@ -108,7 +108,7 @@ export default function FarmerDashboard() {
         setSelectedBatchForQR(batch);
       }
 
-      setMsg(`Batch #${nextId} successfully registered on Polygon Amoy blockchain!`);
+      setMsg(`Batch #${nextId} successfully registered on Ethereum Sepolia blockchain!`);
     } catch (err) {
       console.error(err);
       setMsg(getErrorMessage(err, "Registration failed on blockchain"));
@@ -163,7 +163,7 @@ export default function FarmerDashboard() {
         <div>
           <span className="badge-role">FARMER DASHBOARD</span>
           <h1>Produce Batch Management</h1>
-          <p className="subtitle">Register harvest on Polygon Amoy, generate QR codes, and manage trade listings</p>
+          <p className="subtitle">Register harvest on Ethereum Sepolia, generate QR codes, and manage trade listings</p>
         </div>
 
         <div className="stat-row">
@@ -202,7 +202,7 @@ export default function FarmerDashboard() {
               try {
                 await verifyWallet();
                 await syncRoleOnServer();
-                setMsg("Blockchain role verified on Polygon Amoy.");
+                setMsg("Blockchain role verified on Ethereum Sepolia.");
               } catch (err) {
                 setMsg(getErrorMessage(err, "Sync check"));
               }
@@ -325,7 +325,7 @@ export default function FarmerDashboard() {
           </label>
 
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Recording on Polygon Amoy..." : "🌾 Register Batch On-Chain"}
+            {loading ? "Recording on Ethereum Sepolia..." : "🌾 Register Batch On-Chain"}
           </button>
         </form>
       </section>

@@ -30,7 +30,7 @@ export default function Navbar() {
           <span className="brand-leaf">🌾</span>
           <span className="brand-name">KHETCHAIN</span>
         </Link>
-        <span className="network-pill-header">Polygon Amoy</span>
+        <span className="network-pill-header">Ethereum Sepolia</span>
       </div>
 
       <div className="nav-links">

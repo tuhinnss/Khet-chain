@@ -23,7 +23,7 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="hero-section">
         <div className="hero-badge">
-          <span>🌿 Decentralized Agriculture on Polygon Amoy Testnet</span>
+          <span>🌿 Decentralized Agriculture on Ethereum Sepolia Testnet</span>
         </div>
         <h1 className="hero-title">
           Transparent. Traceable. <em>Trusted.</em>
@@ -57,7 +57,7 @@ export default function LandingPage() {
           </div>
           <div className="hero-stat-card">
             <span className="stat-number">Polygon</span>
-            <span className="stat-text">Amoy Testnet (80002)</span>
+            <span className="stat-text">Sepolia Testnet (11155111)</span>
           </div>
           <div className="hero-stat-card">
             <span className="stat-number">Instant</span>
@@ -134,7 +134,7 @@ export default function LandingPage() {
           <div className="feature-card">
             <div className="feature-icon">⛓️</div>
             <h3>Immutable Traceability</h3>
-            <p>All supply chain events are recorded directly on Polygon Amoy testnet. Past records cannot be altered or deleted.</p>
+            <p>All supply chain events are recorded directly on Ethereum Sepolia testnet. Past records cannot be altered or deleted.</p>
           </div>
 
           <div className="feature-card">

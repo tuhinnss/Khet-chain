@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getBatch, getHistory } from "../api/batch.api";
 import { addSupplyChainEvent } from "../api/supplychain.api";
-import { connectWallet, getContract, ensurePolygonAmoyNetwork } from "../hooks/useWallet";
+import { connectWallet, getContract, ensureSepoliaNetwork } from "../hooks/useWallet";
 import { useAuth } from "../context/AuthContext";
 import StatusBadge from "../components/common/StatusBadge";
 import ProvenanceTimeline from "../components/batch/ProvenanceTimeline";
@@ -79,7 +79,7 @@ export default function WholesalerDashboard() {
     setLatestTxHash("");
 
     try {
-      await ensurePolygonAmoyNetwork();
+      await ensureSepoliaNetwork();
       await connectWallet();
       const contract = await getContract();
 
@@ -98,7 +98,7 @@ export default function WholesalerDashboard() {
       };
 
       const tx = await contract.addSupplyChainEvent(batch.batchId, onChainEvent);
-      setMsg("Recording wholesale audit on Polygon Amoy...");
+      setMsg("Recording wholesale audit on Ethereum Sepolia...");
       const receipt = await tx.wait();
       setLatestTxHash(receipt.hash);
 
@@ -131,7 +131,7 @@ export default function WholesalerDashboard() {
     setMsg("");
 
     try {
-      await ensurePolygonAmoyNetwork();
+      await ensureSepoliaNetwork();
       await connectWallet();
       const contract = await getContract();
 
@@ -146,7 +146,7 @@ export default function WholesalerDashboard() {
         retailerTransfer.retailPrice ? BigInt(retailerTransfer.retailPrice) : 0n
       );
 
-      setMsg("Transferring batch custody to Retailer on Polygon Amoy...");
+      setMsg("Transferring batch custody to Retailer on Ethereum Sepolia...");
       const receipt = await tx.wait();
       setLatestTxHash(receipt.hash);
 
@@ -265,7 +265,7 @@ export default function WholesalerDashboard() {
                 </label>
 
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? "Recording on Amoy..." : "Record Checkpoint on Blockchain"}
+                  {loading ? "Recording on Sepolia..." : "Record Checkpoint on Blockchain"}
                 </button>
               </form>
             </section>
@@ -302,7 +302,7 @@ export default function WholesalerDashboard() {
                 </label>
 
                 <button type="submit" className="btn-secondary" disabled={loading}>
-                  {loading ? "Transferring on Amoy..." : "Transfer to Retailer on Blockchain"}
+                  {loading ? "Transferring on Sepolia..." : "Transfer to Retailer on Blockchain"}
                 </button>
               </form>
             </section>

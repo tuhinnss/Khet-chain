@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title KhetChain
- * @notice Real Web3 Agricultural Traceability & Provenance Platform on Polygon Amoy.
+ * @notice Real Web3 Agricultural Traceability & Provenance Platform on Ethereum Sepolia.
  * Records end-to-end supply chain checkpoints from Farmer -> Distributor -> Wholesaler -> Retailer -> Consumer.
  */
 contract KhetChain is AccessControl, ReentrancyGuard, Pausable {

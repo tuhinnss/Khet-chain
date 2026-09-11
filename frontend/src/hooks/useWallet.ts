@@ -1,6 +1,6 @@
 import { BrowserProvider, Contract, ethers, JsonRpcProvider } from "ethers";
 import abi from "../abi/KhetChain.json";
-import { CONTRACT_ADDRESS, CHAIN_ID, RPC_URL, AMOY_NETWORK_PARAMS } from "../utils/constants";
+import { CONTRACT_ADDRESS, CHAIN_ID, RPC_URL, SEPOLIA_NETWORK_PARAMS } from "../utils/constants";
 
 declare global {
   interface Window {
@@ -13,7 +13,7 @@ declare global {
   }
 }
 
-export async function ensurePolygonAmoyNetwork(): Promise<void> {
+export async function ensureSepoliaNetwork(): Promise<void> {
   if (!window.ethereum) return;
   const targetChainIdHex = "0x" + CHAIN_ID.toString(16);
   try {
@@ -26,7 +26,7 @@ export async function ensurePolygonAmoyNetwork(): Promise<void> {
     if (code === 4902 || (err as { message?: string })?.message?.includes("Unrecognized chain")) {
       await window.ethereum.request({
         method: "wallet_addEthereumChain",
-        params: [AMOY_NETWORK_PARAMS],
+        params: [SEPOLIA_NETWORK_PARAMS],
       });
       return;
     }
@@ -38,7 +38,7 @@ export async function connectWallet(): Promise<string> {
   if (!window.ethereum) {
     throw new Error("MetaMask is not installed. Please install MetaMask from https://metamask.io");
   }
-  await ensurePolygonAmoyNetwork();
+  await ensureSepoliaNetwork();
   const provider = new BrowserProvider(window.ethereum);
   const accounts = (await provider.send("eth_requestAccounts", [])) as string[];
   if (!accounts || accounts.length === 0) {
@@ -54,7 +54,7 @@ export async function getConnectedNetwork(): Promise<{ chainId: number; name: st
     const network = await provider.getNetwork();
     return {
       chainId: Number(network.chainId),
-      name: Number(network.chainId) === 80002 ? "Polygon Amoy" : network.name || "Unknown",
+      name: Number(network.chainId) === 11155111 ? "Ethereum Sepolia" : network.name || "Unknown",
     };
   } catch {
     return { chainId: 0, name: "Unknown" };
@@ -75,7 +75,7 @@ export async function getContract(): Promise<Contract> {
   if (!CONTRACT_ADDRESS) {
     throw new Error("Contract address is not configured. Deploy the contract or set VITE_CONTRACT_ADDRESS in frontend/.env");
   }
-  await ensurePolygonAmoyNetwork();
+  await ensureSepoliaNetwork();
   const provider = new BrowserProvider(window.ethereum);
   const signer = await provider.getSigner();
   return new Contract(CONTRACT_ADDRESS, abi, signer);

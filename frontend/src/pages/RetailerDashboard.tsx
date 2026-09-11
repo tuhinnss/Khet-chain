@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getBatch, getHistory } from "../api/batch.api";
 import { addSupplyChainEvent } from "../api/supplychain.api";
-import { connectWallet, getContract, ensurePolygonAmoyNetwork } from "../hooks/useWallet";
+import { connectWallet, getContract, ensureSepoliaNetwork } from "../hooks/useWallet";
 import { useAuth } from "../context/AuthContext";
 import QRScanner from "../components/qr/QRScanner";
 import QRGenerator from "../components/qr/QRGenerator";
@@ -70,7 +70,7 @@ export default function RetailerDashboard() {
     setLatestTxHash("");
 
     try {
-      await ensurePolygonAmoyNetwork();
+      await ensureSepoliaNetwork();
       await connectWallet();
       const contract = await getContract();
 
@@ -90,7 +90,7 @@ export default function RetailerDashboard() {
 
       // 1. Record final retail event
       const eventTx = await contract.addSupplyChainEvent(batch.batchId, onChainEvent);
-      setMsg("Recording retail receipt on Polygon Amoy...");
+      setMsg("Recording retail receipt on Ethereum Sepolia...");
       const eventReceipt = await eventTx.wait();
       setLatestTxHash(eventReceipt.hash);
 
@@ -109,7 +109,7 @@ export default function RetailerDashboard() {
         storageDetails: shelfForm.shelfDetails,
       }).catch(() => {});
 
-      setMsg(`Batch #${batch.batchId} marked Retail Ready on Polygon Amoy! QR code active.`);
+      setMsg(`Batch #${batch.batchId} marked Retail Ready on Ethereum Sepolia! QR code active.`);
       loadBatch(batch.batchId);
     } catch (err) {
       setMsg(getErrorMessage(err, "Failed to update retail status"));
@@ -250,7 +250,7 @@ export default function RetailerDashboard() {
               </label>
 
               <button type="submit" className="btn-primary" disabled={loading}>
-                {loading ? "Activating on Polygon Amoy..." : "✅ Mark Retail Ready & Publish to Consumers"}
+                {loading ? "Activating on Ethereum Sepolia..." : "✅ Mark Retail Ready & Publish to Consumers"}
               </button>
             </form>
           </section>

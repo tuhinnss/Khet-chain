@@ -188,7 +188,7 @@ export default function TracePage() {
           </div>
         </div>
         <div className="trace-header-right">
-          <span className="badge-polygon">Polygon Amoy Verified</span>
+          <span className="badge-polygon">Ethereum Sepolia Verified</span>
           <button
             type="button"
             onClick={() => setShowQR(!showQR)}
@@ -208,7 +208,7 @@ export default function TracePage() {
 
       {loading ? (
         <div className="loading-card">
-          <p>⏳ Loading blockchain provenance records from Polygon Amoy...</p>
+          <p>⏳ Loading blockchain provenance records from Ethereum Sepolia...</p>
         </div>
       ) : batch ? (
         <>
@@ -254,7 +254,7 @@ export default function TracePage() {
           <section className="journey-section">
             <div className="section-header">
               <h2>🌾 End-to-End Supply Chain Journey</h2>
-              <p className="subtitle">Immutable checkpoints verified on Polygon Amoy blockchain</p>
+              <p className="subtitle">Immutable checkpoints verified on Ethereum Sepolia blockchain</p>
             </div>
 
             <ProvenanceTimeline events={events} />
@@ -264,7 +264,7 @@ export default function TracePage() {
           <section className="blockchain-verification-card">
             <h3>⛓️ Blockchain Verification</h3>
             <p className="muted" style={{ marginBottom: "1rem" }}>
-              KHETCHAIN guarantees transparency by recording provenance transactions on the public Polygon Amoy EVM testnet.
+              KHETCHAIN guarantees transparency by recording provenance transactions on the public Ethereum Sepolia EVM testnet.
             </p>
 
             <dl className="verification-dl">

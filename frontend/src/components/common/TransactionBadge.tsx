@@ -41,7 +41,7 @@ export default function TransactionBadge({ txHash, label, showLink = true }: Tra
           target="_blank"
           rel="noopener noreferrer"
           className="tx-btn explorer-link"
-          title="View on Polygon Amoy Explorer"
+          title="View on Ethereum Sepolia Explorer"
         >
           View on Explorer ↗
         </a>

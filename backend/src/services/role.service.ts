@@ -42,7 +42,7 @@ export async function ensureOnChainRole(
     if (!code || code === "0x") {
       return {
         granted: false,
-        error: "Contract not deployed. Run: cd contracts && npm run deploy:local or npm run deploy:amoy",
+        error: "Contract not deployed. Run: cd contracts && npm run deploy:local or npm run deploy:sepolia",
       };
     }
 
