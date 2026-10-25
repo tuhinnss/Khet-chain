@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { getBatch, getHistory, verifyBatch } from "../api/batch.api";
-import { getContractReadOnly } from "../hooks/useWallet";
-import { Batch, SupplyChainEvent } from "../types";
+import { getContractReadOnly, STATUS_ENUM } from "../hooks/useWallet";
+import { Batch, BatchStatus, SupplyChainEvent } from "../types";
 import { CONTRACT_ADDRESS, EXPLORER_URL } from "../utils/constants";
 import { secretMatchesHash } from "../utils/qr";
+import { isTradeAction } from "../utils/price";
 import ProvenanceTimeline from "../components/batch/ProvenanceTimeline";
 import StatusBadge, { QualityBadge } from "../components/common/StatusBadge";
 import TransactionBadge from "../components/common/TransactionBadge";
@@ -85,7 +86,8 @@ export default function TracePage() {
           farmerAddress: chainBatch.farmerAddress,
           currentOwner: chainBatch.currentOwner,
           currentPrice: chainBatch.currentPrice.toString(),
-          status: "RetailReady",
+          status: (Object.keys(STATUS_ENUM).find((name) => STATUS_ENUM[name] === Number(chainBatch.status)) ??
+            "Created") as BatchStatus,
           qrHash: chainBatch.qrHash,
         };
 
@@ -224,6 +226,8 @@ export default function TracePage() {
   }
 
   const latestQuality = events.length > 0 ? events[events.length - 1].quality : "GOOD";
+  // Latest ₹ price from a provenance event (listing/purchase events carry wei, not rupees).
+  const retailPrice = [...events].reverse().find((e) => !isTradeAction(e.action) && Number(e.price) > 0)?.price;
   const displayId = batch?.batchStringId || `KHC-2026-${String(batchId).padStart(6, "0")}`;
 
   return (
@@ -273,7 +277,7 @@ export default function TracePage() {
                 <p className="crop-desc">{batch.description || "Farm-fresh certified agricultural produce."}</p>
               </div>
               <div className="produce-status-column">
-                <StatusBadge status={batch.status || "RetailReady"} />
+                <StatusBadge status={batch.status} />
                 <QualityBadge quality={latestQuality} />
               </div>
             </div>
@@ -296,7 +300,7 @@ export default function TracePage() {
               <div className="meta-box">
                 <span className="meta-label">Retail Price</span>
                 <span className="meta-value price-hero">
-                  ₹{batch.currentPrice || "28"}/{batch.unit || "kg"}
+                  {retailPrice ? `₹${retailPrice}/${batch.unit || "kg"}` : "—"}
                 </span>
               </div>
             </div>
@@ -322,15 +326,17 @@ export default function TracePage() {
             <dl className="verification-dl">
               <dt>Smart Contract Address:</dt>
               <dd>
-                <code>{CONTRACT_ADDRESS || "0x98f21908ab1c9842a12903fe01991f272a4f89d"}</code>
-                <a
-                  href={`${EXPLORER_URL}/address/${CONTRACT_ADDRESS || ""}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="tx-btn explorer-link"
-                >
-                  Contract on Polygonscan ↗
-                </a>
+                <code>{CONTRACT_ADDRESS || "Not configured"}</code>
+                {CONTRACT_ADDRESS && (
+                  <a
+                    href={`${EXPLORER_URL}/address/${CONTRACT_ADDRESS}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="tx-btn explorer-link"
+                  >
+                    View on block explorer ↗
+                  </a>
+                )}
               </dd>
 
               <dt>Batch QR Cryptographic Hash:</dt>

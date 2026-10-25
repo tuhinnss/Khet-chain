@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { formatEther } from "ethers";
 import { AuthRequest } from "../types/index.js";
 import { Listing } from "../models/Listing.js";
 import { Batch } from "../models/Batch.js";
@@ -28,11 +27,11 @@ export async function createListing(req: AuthRequest, res: Response): Promise<vo
   }
   await claimTx(txHash, "listing-created", wallet);
 
-  const askingPrice = formatEther(parsed.args.price as bigint);
-  await Batch.updateOne(
-    { batchId },
-    { status: "Listed", currentPrice: askingPrice, "txHashes.listed": txHash }
-  );
+  // Trade amounts are stored as wei strings, like on-chain; the UI formats them.
+  const askingPrice = (parsed.args.price as bigint).toString();
+  await Batch.updateOne({ batchId }, { currentPrice: askingPrice, "txHashes.listed": txHash });
+  // Re-pricing an active listing keeps its status (e.g. BidReceived) on-chain.
+  await Batch.updateOne({ batchId, status: "Created" }, { status: "Listed" });
 
   const listing = await Listing.findOneAndUpdate(
     { batchId },

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getListings } from "../api/listing.api";
 import { Listing } from "../types";
+import { formatEth } from "../utils/price";
 
 export default function Marketplace() {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -27,7 +28,7 @@ export default function Marketplace() {
           <div key={l._id} className="batch-card">
             <h3>{l.cropName}</h3>
             <p>Batch #{l.batchId} · {l.quantity} kg</p>
-            <p className="price">{(Number(l.askingPrice) / 1e18 || Number(l.askingPrice)).toFixed(4)} ETH</p>
+            <p className="price">{formatEth(l.askingPrice)}</p>
             <Link to={`/batch/${l.batchId}`}>View batch →</Link>
           </div>
         ))}

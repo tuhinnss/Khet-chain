@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { connectWallet } from "../hooks/useWallet";
+import { getErrorMessage } from "../utils/errors";
 import { useState } from "react";
 
 export default function LandingPage() {
@@ -12,7 +13,7 @@ export default function LandingPage() {
       await connectWallet();
       navigate("/register");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "MetaMask connection failed");
+      alert(getErrorMessage(err, "MetaMask connection failed"));
     } finally {
       setConnecting(false);
     }

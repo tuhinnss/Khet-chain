@@ -9,7 +9,7 @@ import ProvenanceTimeline from "../components/batch/ProvenanceTimeline";
 import QRScanner from "../components/qr/QRScanner";
 import TransactionBadge from "../components/common/TransactionBadge";
 import { Batch, SupplyChainEvent } from "../types";
-import { getErrorMessage } from "../utils/errors";
+import { describeFailure } from "../utils/errors";
 import { parseQrPayload } from "../utils/qr";
 
 export default function WholesalerDashboard() {
@@ -52,7 +52,7 @@ export default function WholesalerDashboard() {
       setEvents(h.supplyChainEvents || b.supplyChainEvents || []);
       setMsg(`Loaded Batch #${id} (${b.cropName})`);
     } catch (err) {
-      setMsg(getErrorMessage(err, "Failed to load batch"));
+      setMsg(describeFailure(err, "Loading the batch"));
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ export default function WholesalerDashboard() {
       setMsg(`Wholesale checkpoint [${eventForm.action}] recorded on blockchain!`);
       loadBatchDetails(batch.batchId);
     } catch (err) {
-      setMsg(getErrorMessage(err, "Event recording failed"));
+      setMsg(describeFailure(err, "Event recording"));
     } finally {
       setLoading(false);
     }
@@ -159,7 +159,7 @@ export default function WholesalerDashboard() {
       setMsg(`Batch #${batch.batchId} custody transferred to Retailer!`);
       loadBatchDetails(batch.batchId);
     } catch (err) {
-      setMsg(getErrorMessage(err, "Transfer failed"));
+      setMsg(describeFailure(err, "Transfer"));
     } finally {
       setLoading(false);
     }

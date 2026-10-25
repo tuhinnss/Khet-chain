@@ -8,10 +8,11 @@ export async function getStats(req: AuthRequest, res: Response): Promise<void> {
   const { role, walletAddress, userId } = req.user!;
 
   if (role === "farmer") {
+    const myBatchIds = await Batch.distinct("batchId", { farmerId: userId });
     const [batches, listings, pendingBids] = await Promise.all([
       Batch.countDocuments({ farmerId: userId }),
       Listing.countDocuments({ farmerId: userId, isActive: true }),
-      Bid.countDocuments({ status: "pending" }),
+      Bid.countDocuments({ status: "pending", batchId: { $in: myBatchIds } }),
     ]);
     res.json({ success: true, data: { batches, activeListings: listings, pendingBids } });
     return;

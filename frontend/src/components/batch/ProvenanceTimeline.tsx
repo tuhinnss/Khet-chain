@@ -1,6 +1,7 @@
 import { SupplyChainEvent, ProvenanceRecord } from "../../types";
 import { QualityBadge } from "../common/StatusBadge";
 import TransactionBadge from "../common/TransactionBadge";
+import { formatEventPrice } from "../../utils/price";
 
 interface ProvenanceTimelineProps {
   events?: SupplyChainEvent[];
@@ -56,9 +57,7 @@ export default function ProvenanceTimeline({ events = [], history = [] }: Proven
                     <div className="timeline-detail-item">
                       <span className="detail-label">💰 Price:</span>
                       <span className="detail-value price-highlight">
-                        {Number(evt.price) > 1e12
-                          ? `${(Number(evt.price) / 1e18).toFixed(4)} MATIC`
-                          : `₹${evt.price}`}
+                        {formatEventPrice(evt.action, evt.price)}
                       </span>
                     </div>
                   )}

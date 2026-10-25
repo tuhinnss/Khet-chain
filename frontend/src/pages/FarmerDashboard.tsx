@@ -13,8 +13,9 @@ import StatusBadge from "../components/common/StatusBadge";
 import TransactionBadge from "../components/common/TransactionBadge";
 import QRGenerator from "../components/qr/QRGenerator";
 import { Batch } from "../types";
-import { getErrorMessage } from "../utils/errors";
+import { describeFailure, getErrorMessage } from "../utils/errors";
 import { createQrSecret } from "../utils/qr";
+import { formatEth } from "../utils/price";
 
 // A registered batch whose QR secret hasn't reached the server yet. Kept in
 // localStorage because until the sync succeeds it is the only copy of the secret.
@@ -40,6 +41,9 @@ function writePendingSyncs(key: string, items: PendingSync[]) {
     // storage unavailable; the in-memory copy still allows a retry this session
   }
 }
+
+const ON_MARKET = ["Created", "Listed", "BidReceived"];
+const isListed = (b: Batch) => b.status === "Listed" || b.status === "BidReceived";
 
 function batchIdFromReceipt(contract: Contract, receipt: ContractTransactionReceipt): number | null {
   for (const log of receipt.logs) {
@@ -183,7 +187,7 @@ export default function FarmerDashboard() {
       }
     } catch (err) {
       console.error(err);
-      setMsg(getErrorMessage(err, "Registration failed on blockchain"));
+      setMsg(describeFailure(err, "Registration"));
     } finally {
       setLoading(false);
     }
@@ -198,10 +202,10 @@ export default function FarmerDashboard() {
       const tx = await contract.createListing(batchId, parseEther(price));
       const receipt = await tx.wait();
       await createListing({ batchId, askingPrice: price, txHash: receipt.hash }).catch(() => {});
-      setMsg(`Batch #${batchId} listed on marketplace at ${price} MATIC`);
+      setMsg(`Batch #${batchId} listed on marketplace at ${price} ETH`);
       setLatestTxHash(receipt.hash);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Listing failed");
+      setMsg(describeFailure(err, "Listing"));
     } finally {
       setLoading(false);
     }
@@ -223,7 +227,7 @@ export default function FarmerDashboard() {
       setLatestTxHash(receipt.hash);
       await loadBids(batchId);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Accept failed");
+      setMsg(describeFailure(err, "Accepting the bid"));
     } finally {
       setLoading(false);
     }
@@ -240,15 +244,15 @@ export default function FarmerDashboard() {
 
         <div className="stat-row">
           <div className="stat">
-            <span>{batches.length || stats.batches || 1}</span>
+            <span>{batches.length || stats.batches || 0}</span>
             <label>Total Batches</label>
           </div>
           <div className="stat">
-            <span>{batches.filter((b) => b.status === "Created" || b.status === "Listed").length || 1}</span>
+            <span>{batches.filter((b) => ON_MARKET.includes(b.status)).length}</span>
             <label>Active Batches</label>
           </div>
           <div className="stat">
-            <span>{batches.filter((b) => b.status === "Sold" || b.status === "RetailReady").length || 0}</span>
+            <span>{batches.filter((b) => !ON_MARKET.includes(b.status)).length}</span>
             <label>Sold / Transferred</label>
           </div>
         </div>
@@ -276,7 +280,7 @@ export default function FarmerDashboard() {
                 await syncRoleOnServer();
                 setMsg("Blockchain role verified on Ethereum Sepolia.");
               } catch (err) {
-                setMsg(getErrorMessage(err, "Sync check"));
+                setMsg(describeFailure(err, "Role sync"));
               }
             }}
           >
@@ -397,7 +401,7 @@ export default function FarmerDashboard() {
               />
             </label>
             <label>
-              Initial Asking Price (₹ per unit)
+              Farm-gate Price (₹ per unit)
               <input
                 type="number"
                 value={form.initialPrice}
@@ -447,7 +451,11 @@ export default function FarmerDashboard() {
                   <p><strong>Batch:</strong> #{b.batchId} ({b.batchStringId || `KHC-2026-${String(b.batchId).padStart(6, "0")}`})</p>
                   <p><strong>Quantity:</strong> {b.quantity} {b.unit || "kg"}</p>
                   <p><strong>Location:</strong> 📍 {b.location}</p>
-                  {b.currentPrice && <p className="price">Price: ₹{b.currentPrice}</p>}
+                  {b.currentPrice && b.currentPrice !== "0" && (
+                    <p className="price">
+                      {isListed(b) ? "Asking" : "Sold for"}: {formatEth(b.currentPrice)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="batch-card-actions">
@@ -465,12 +473,12 @@ export default function FarmerDashboard() {
 
                 <div className="inline-form listing-form">
                   <input
-                    placeholder="List (MATIC)"
+                    placeholder="Price (ETH)"
                     value={listingPrice[b.batchId] ?? ""}
                     onChange={(e) => setListingPrice({ ...listingPrice, [b.batchId]: e.target.value })}
                   />
                   <button type="button" onClick={() => listBatch(b.batchId)} className="btn-primary-sm">
-                    List
+                    {isListed(b) ? "Update price" : "List"}
                   </button>
                   <button type="button" onClick={() => loadBids(b.batchId)} className="btn-ghost-sm">
                     Bids
@@ -484,7 +492,7 @@ export default function FarmerDashboard() {
                       .filter((bid) => bid.active)
                       .map((bid) => (
                         <div key={bid.index} className="bid-item">
-                          <span>{bid.dealer.slice(0, 8)}... — {(Number(bid.amount) / 1e18).toFixed(4)} MATIC</span>
+                          <span>{bid.dealer.slice(0, 8)}... — {formatEth(bid.amount)}</span>
                           <button
                             type="button"
                             onClick={() => handleAccept(b.batchId, bid.index)}

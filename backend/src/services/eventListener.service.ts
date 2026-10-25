@@ -69,7 +69,8 @@ async function handleEvent(
   }
 
   if (eventName === "ListingCreated" && batchId) {
-    await Batch.updateOne({ batchId }, { status: "Listed", currentPrice: args.price.toString() });
+    // Status comes from StatusUpdated: re-pricing an active listing doesn't change it.
+    await Batch.updateOne({ batchId }, { currentPrice: args.price.toString() });
   }
 
   if (eventName === "BidPlaced" && batchId) {

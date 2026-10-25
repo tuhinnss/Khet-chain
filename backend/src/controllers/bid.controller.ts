@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { formatEther } from "ethers";
 import { AuthRequest } from "../types/index.js";
 import { Bid } from "../models/Bid.js";
 import { Listing } from "../models/Listing.js";
@@ -28,8 +27,8 @@ export async function placeBid(req: AuthRequest, res: Response): Promise<void> {
   }
   await claimTx(txHash, "bid-placed", wallet);
 
-  // Record what was actually escrowed, not what the client says it bid.
-  const amount = formatEther(parsed.args.amount as bigint);
+  // Record what was actually escrowed (wei), not what the client says it bid.
+  const amount = (parsed.args.amount as bigint).toString();
   const onChainBids = await readBids(batchId);
   const activeBid = onChainBids.filter((b: { active: boolean }) => b.active).pop();
 

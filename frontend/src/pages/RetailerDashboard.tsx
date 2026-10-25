@@ -10,7 +10,7 @@ import ProvenanceTimeline from "../components/batch/ProvenanceTimeline";
 import StatusBadge from "../components/common/StatusBadge";
 import TransactionBadge from "../components/common/TransactionBadge";
 import { Batch, SupplyChainEvent } from "../types";
-import { getErrorMessage } from "../utils/errors";
+import { describeFailure } from "../utils/errors";
 import { getBatchQR } from "../api/qr.api";
 import { parseQrPayload } from "../utils/qr";
 
@@ -47,7 +47,7 @@ export default function RetailerDashboard() {
       setEvents(h.supplyChainEvents || b.supplyChainEvents || []);
       setMsg(`Loaded Batch #${id} (${b.cropName})`);
     } catch (err) {
-      setMsg(getErrorMessage(err, "Failed to load batch"));
+      setMsg(describeFailure(err, "Loading the batch"));
     } finally {
       setLoading(false);
     }
@@ -110,7 +110,7 @@ export default function RetailerDashboard() {
       setMsg(`Batch #${batch.batchId} marked Retail Ready on Ethereum Sepolia! QR code active.`);
       loadBatch(batch.batchId);
     } catch (err) {
-      setMsg(getErrorMessage(err, "Failed to update retail status"));
+      setMsg(describeFailure(err, "Updating retail status"));
     } finally {
       setLoading(false);
     }

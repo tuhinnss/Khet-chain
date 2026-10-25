@@ -249,7 +249,8 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
             description: description,
             farmerAddress: msg.sender,
             currentOwner: msg.sender,
-            currentPrice: initialPrice,
+            // currentPrice is the marketplace asking/sale price in wei; createListing sets it.
+            currentPrice: 0,
             status: BatchStatus.Created,
             qrHash: qrHash,
             createdAt: block.timestamp,
@@ -283,6 +284,8 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
 
     /**
      * @notice Register a new produce batch on-chain with detailed farm parameters.
+     * @param initialPrice Farm-gate price in rupees (INR) per unit, recorded in the HARVESTED
+     * event for provenance. Marketplace prices are wei and are set by createListing.
      */
     function registerBatch(
         string calldata cropName,
@@ -351,13 +354,9 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         SupplyChainEvent memory recorded = evt;
         recorded.actor = msg.sender;
         recorded.timestamp = block.timestamp;
+        // evt.price is an INR-per-unit provenance price; it never touches the
+        // marketplace currentPrice (wei), which only createListing/acceptBid set.
         batchEvents[batchId].push(recorded);
-
-        if (evt.price > 0 && evt.price != batch.currentPrice) {
-            uint256 oldPrice = batch.currentPrice;
-            batch.currentPrice = evt.price;
-            emit PriceUpdated(batchId, oldPrice, evt.price);
-        }
 
         if (bytes(evt.quality).length > 0) {
             emit QualityChecked(batchId, msg.sender, evt.quality);
@@ -398,15 +397,13 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
 
         address previousOwner = batch.currentOwner;
         batch.currentOwner = newOwner;
-        if (transferPrice > 0) {
-            batch.currentPrice = transferPrice;
-        }
 
+        // transferPrice is INR per unit (provenance only), like checkpoint prices.
         SupplyChainEvent memory transferEvent = SupplyChainEvent({
             actor: msg.sender,
             actorRole: newRole,
             action: "TRANSFERRED",
-            price: transferPrice > 0 ? transferPrice : batch.currentPrice,
+            price: transferPrice,
             quantity: batch.quantity,
             location: location,
             quality: bytes(quality).length > 0 ? quality : "GOOD",
@@ -426,7 +423,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
             msg.sender,
             newRole,
             "TRANSFERRED",
-            transferPrice > 0 ? transferPrice : batch.currentPrice,
+            transferPrice,
             quality,
             location,
             block.timestamp
@@ -450,7 +447,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
             actor: msg.sender,
             actorRole: "ACTOR",
             action: "TRANSFERRED",
-            price: batch.currentPrice,
+            price: 0,
             quantity: batch.quantity,
             location: batch.location,
             quality: "GOOD",
@@ -472,14 +469,20 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     {
         ProduceBatch storage batch = _getBatch(batchId);
         require(batch.currentOwner == msg.sender, "Not owner");
+        // Listed/BidReceived: the farmer is re-pricing an active listing.
         require(
-            batch.status == BatchStatus.Created || batch.status == BatchStatus.BidReceived,
+            batch.status == BatchStatus.Created ||
+            batch.status == BatchStatus.Listed ||
+            batch.status == BatchStatus.BidReceived,
             "Invalid status"
         );
 
         BatchStatus oldStatus = batch.status;
         batch.currentPrice = price;
-        batch.status = BatchStatus.Listed;
+        // Re-pricing keeps BidReceived so escrowed bids aren't hidden.
+        if (oldStatus == BatchStatus.Created) {
+            batch.status = BatchStatus.Listed;
+        }
 
         SupplyChainEvent memory listingEvent = SupplyChainEvent({
             actor: msg.sender,
@@ -496,10 +499,12 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         });
         batchEvents[batchId].push(listingEvent);
 
-        _recordProvenance(batchId, msg.sender, msg.sender, BatchStatus.Listed, "listed");
+        _recordProvenance(batchId, msg.sender, msg.sender, batch.status, "listed");
 
         emit ListingCreated(batchId, price);
-        emit StatusUpdated(batchId, oldStatus, BatchStatus.Listed);
+        if (batch.status != oldStatus) {
+            emit StatusUpdated(batchId, oldStatus, batch.status);
+        }
     }
 
     function placeBid(uint256 batchId) external payable nonReentrant whenNotPaused {

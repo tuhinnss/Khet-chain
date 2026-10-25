@@ -66,7 +66,9 @@ export async function syncBatch(req: AuthRequest, res: Response): Promise<void> 
       farmerAddress: wallet,
       farmerId: req.user!.userId,
       currentOwner: wallet,
-      currentPrice: currentPrice || "0",
+      // Marketplace price (wei) starts unset; the body's currentPrice is the INR
+      // farm-gate price, which belongs to the harvest event below.
+      currentPrice: "0",
       status: "Created",
       qrHash,
       qrSecret,

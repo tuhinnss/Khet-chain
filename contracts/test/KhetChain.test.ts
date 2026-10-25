@@ -62,7 +62,7 @@ describe("KhetChain Smart Contract", () => {
       "Nalbari, Assam",
       "India Organic / NPOP Certified",
       "Fresh farm vine-ripened tomatoes",
-      ethers.parseEther("0.05"),
+      20, // farm-gate price, INR per unit
       QR_HASH
     );
     await expect(tx).to.emit(contract, "BatchCreated");
@@ -76,6 +76,9 @@ describe("KhetChain Smart Contract", () => {
     expect(batch.currentOwner).to.equal(farmer.address);
     expect(batch.certification).to.equal("India Organic / NPOP Certified");
     expect(batch.batchStringId).to.include("KHC-2026-");
+    // No asking price until listed; the INR farm-gate price lives in the harvest event.
+    expect(batch.currentPrice).to.equal(0n);
+    expect((await contract.getSupplyChainEvents(1))[0].price).to.equal(20n);
   });
 
   it("2. Retrieve batch: fetches accurate batch information and initial harvest event", async () => {
@@ -158,12 +161,16 @@ describe("KhetChain Smart Contract", () => {
       "Dry Cargo Truck HR-01-XY-9876",
       "Grain Silo #4",
       "GOOD",
-      ethers.parseEther("0.55")
+      34 // INR per unit
     );
 
     batch = await contract.getBatch(1);
     expect(batch.currentOwner).to.equal(wholesaler.address);
-    expect(batch.currentPrice).to.equal(ethers.parseEther("0.55"));
+    // The transfer price is provenance (INR); the marketplace sale price (wei) is untouched.
+    expect(batch.currentPrice).to.equal(ethers.parseEther("0.5"));
+    const events = await contract.getSupplyChainEvents(1);
+    expect(events[events.length - 1].action).to.equal("TRANSFERRED");
+    expect(events[events.length - 1].price).to.equal(34n);
 
     // Wholesaler transfers to Retailer
     await contract.connect(wholesaler)["transferOwnership(uint256,address,string,string,string,string,string,uint256)"](
@@ -174,14 +181,14 @@ describe("KhetChain Smart Contract", () => {
       "Local Delivery Van",
       "Shelf Ready Refrigerated Display",
       "GOOD",
-      ethers.parseEther("0.65")
+      40 // INR per unit
     );
 
     batch = await contract.getBatch(1);
     expect(batch.currentOwner).to.equal(retailer.address);
   });
 
-  it("5. Update price: updates produce price when added through supply chain checkpoint", async () => {
+  it("5. Checkpoint price: records an INR provenance price without touching the asking price", async () => {
     await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
       "Organic Apples",
       300,
@@ -189,12 +196,13 @@ describe("KhetChain Smart Contract", () => {
       "Shimla, HP",
       QR_HASH
     );
+    await contract.connect(farmer).createListing(1, ethers.parseEther("0.1"));
 
     const priceEvent = {
       actor: farmer.address,
       actorRole: "FARMER",
       action: "PRICE_UPDATE",
-      price: ethers.parseEther("0.08"),
+      price: 80, // INR per unit
       quantity: 300,
       location: "Shimla",
       quality: "GOOD",
@@ -204,12 +212,35 @@ describe("KhetChain Smart Contract", () => {
       metadataURI: "",
     };
 
-    await expect(contract.connect(farmer).addSupplyChainEvent(1, priceEvent))
-      .to.emit(contract, "PriceUpdated")
-      .withArgs(1, 0n, ethers.parseEther("0.08"));
+    await expect(contract.connect(farmer).addSupplyChainEvent(1, priceEvent)).to.emit(
+      contract,
+      "SupplyChainEventAdded"
+    );
 
-    const batch = await contract.getBatch(1);
-    expect(batch.currentPrice).to.equal(ethers.parseEther("0.08"));
+    const events = await contract.getSupplyChainEvents(1);
+    expect(events[events.length - 1].price).to.equal(80n);
+    expect((await contract.getBatch(1)).currentPrice).to.equal(ethers.parseEther("0.1"));
+  });
+
+  it("5b. Re-pricing: the farmer can change an active listing's asking price", async () => {
+    await registerSimpleBatch();
+    expect((await contract.getBatch(1)).currentPrice).to.equal(0n);
+
+    await contract.connect(farmer).createListing(1, ethers.parseEther("0.1"));
+    await expect(contract.connect(farmer).createListing(1, ethers.parseEther("0.2"))).not.to.emit(
+      contract,
+      "StatusUpdated"
+    );
+    expect((await contract.getBatch(1)).currentPrice).to.equal(ethers.parseEther("0.2"));
+
+    await expect(
+      contract.connect(distributor).placeBid(1, { value: ethers.parseEther("0.1") })
+    ).to.be.revertedWith("Bid below asking price");
+    await contract.connect(distributor).placeBid(1, { value: ethers.parseEther("0.2") });
+
+    // Re-pricing with bids escrowed keeps BidReceived (status enum 2).
+    await contract.connect(farmer).createListing(1, ethers.parseEther("0.3"));
+    expect((await contract.getBatch(1)).status).to.equal(2n);
   });
 
   it("6. Quality check: logs quality checkpoint and emits event", async () => {

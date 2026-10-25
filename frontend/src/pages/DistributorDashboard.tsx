@@ -13,7 +13,8 @@ import QRScanner from "../components/qr/QRScanner";
 import TransactionBadge from "../components/common/TransactionBadge";
 import ReclaimBidCard from "../components/bid/ReclaimBidCard";
 import { Listing, Batch } from "../types";
-import { getErrorMessage } from "../utils/errors";
+import { describeFailure } from "../utils/errors";
+import { formatEth } from "../utils/price";
 import { parseQrPayload } from "../utils/qr";
 
 export default function DistributorDashboard() {
@@ -69,7 +70,7 @@ export default function DistributorDashboard() {
       setSelectedBatch(data);
       setMsg(`Loaded Batch #${id} (${data.cropName})`);
     } catch (err) {
-      setMsg(getErrorMessage(err, "Batch search failed"));
+      setMsg(describeFailure(err, "Batch search"));
     } finally {
       setLoading(false);
     }
@@ -92,10 +93,10 @@ export default function DistributorDashboard() {
       const receipt = await tx.wait();
       setLatestTxHash(receipt.hash);
       await placeBid({ batchId, amount, txHash: receipt.hash }).catch(() => {});
-      setMsg(`Bid of ${amount} MATIC placed on-chain for batch #${batchId}!`);
+      setMsg(`Bid of ${amount} ETH placed on-chain for batch #${batchId}!`);
       loadListings();
     } catch (err) {
-      setMsg(getErrorMessage(err, "Bid failed"));
+      setMsg(describeFailure(err, "Bid"));
     } finally {
       setLoading(false);
     }
@@ -147,7 +148,7 @@ export default function DistributorDashboard() {
       setMsg(`Supply chain event [${eventForm.action}] successfully recorded on Ethereum Sepolia!`);
       handleSearchBatch(selectedBatch.batchId);
     } catch (err) {
-      setMsg(getErrorMessage(err, "Event recording failed"));
+      setMsg(describeFailure(err, "Event recording"));
     } finally {
       setLoading(false);
     }
@@ -193,7 +194,7 @@ export default function DistributorDashboard() {
       setMsg(`Batch #${selectedBatch.batchId} custody transferred on-chain to ${transferForm.newRole}!`);
       handleSearchBatch(selectedBatch.batchId);
     } catch (err) {
-      setMsg(getErrorMessage(err, "Transfer failed"));
+      setMsg(describeFailure(err, "Transfer"));
     } finally {
       setLoading(false);
     }
@@ -409,10 +410,10 @@ export default function DistributorDashboard() {
                 </div>
                 <p><strong>Batch:</strong> #{l.batchId}</p>
                 <p><strong>Quantity:</strong> {l.quantity} kg</p>
-                <p className="price">Asking: {(Number(l.askingPrice) / 1e18 || Number(l.askingPrice)).toFixed(4)} MATIC</p>
+                <p className="price">Asking: {formatEth(l.askingPrice)}</p>
                 <div className="inline-form">
                   <input
-                    placeholder="Bid (MATIC)"
+                    placeholder="Bid (ETH)"
                     value={bidAmounts[l.batchId] ?? ""}
                     onChange={(e) => setBidAmounts({ ...bidAmounts, [l.batchId]: e.target.value })}
                   />

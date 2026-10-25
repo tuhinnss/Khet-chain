@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { acceptBid, getBids } from "../api/bid.api";
 import { getContract } from "../hooks/useWallet";
+import { getErrorMessage } from "../utils/errors";
+import { formatEth } from "../utils/price";
 
 export default function BidManagement() {
   const [batchId, setBatchId] = useState("");
@@ -22,7 +24,7 @@ export default function BidManagement() {
       setMsg(`Accepted bid #${index}`);
       await load();
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Failed");
+      setMsg(getErrorMessage(err, "Accepting the bid failed"));
     }
   }
 
@@ -36,7 +38,7 @@ export default function BidManagement() {
       {msg && <div className="alert">{msg}</div>}
       {bids?.onChainBids?.map((b) => (
         <div key={b.index} className="bid-item card">
-          <span>#{b.index} — {b.dealer.slice(0, 10)}… — {(Number(b.amount) / 1e18).toFixed(4)} ETH {b.active ? "(active)" : ""}</span>
+          <span>#{b.index} — {b.dealer.slice(0, 10)}… — {formatEth(b.amount)} {b.active ? "(active)" : ""}</span>
           {b.active && <button onClick={() => accept(b.index)} className="btn-primary-sm">Accept</button>}
         </div>
       ))}

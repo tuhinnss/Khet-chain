@@ -12,6 +12,7 @@ import QRScanner from "../components/qr/QRScanner";
 import ReclaimBidCard from "../components/bid/ReclaimBidCard";
 import { Listing } from "../types";
 import { getErrorMessage } from "../utils/errors";
+import { formatEth } from "../utils/price";
 import { parseQrPayload, tracePath } from "../utils/qr";
 
 export default function DealerDashboard() {
@@ -88,7 +89,7 @@ export default function DealerDashboard() {
       await updateStatus({ batchId, status: "InTransit", txHash: receipt.hash });
       setMsg(`Batch #${batchId} marked In Transit`);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Status update failed");
+      setMsg(getErrorMessage(err, "Status update failed"));
     }
   }
 
@@ -150,7 +151,7 @@ export default function DealerDashboard() {
                 <StatusBadge status="Listed" />
               </div>
               <p>Batch #{l.batchId} · {l.quantity} kg</p>
-              <p>Asking: {(Number(l.askingPrice) / 1e18 || Number(l.askingPrice)).toFixed(4)} ETH</p>
+              <p>Asking: {formatEth(l.askingPrice)}</p>
               <div className="inline-form">
                 <input placeholder="Bid (ETH)" value={bidAmounts[l.batchId] ?? ""} onChange={(e) => setBidAmounts({ ...bidAmounts, [l.batchId]: e.target.value })} />
                 <button onClick={() => submitBid(l.batchId)} className="btn-primary">Place Bid</button>
