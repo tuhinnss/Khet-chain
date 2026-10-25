@@ -20,9 +20,17 @@ export function getContract(signerOrProvider?: ethers.Signer | ethers.Provider) 
   );
 }
 
-export function getRelayerSigner(): ethers.Wallet | null {
+let relayer: ethers.NonceManager | null = null;
+
+/**
+ * The relayer that grants/revokes roles. It is one shared NonceManager because
+ * ethers serves identical RPC calls from a 250 ms cache: a fresh Wallet per
+ * call reused the previous nonce when two grants were sent close together.
+ */
+export function getRelayerSigner(): ethers.NonceManager | null {
   if (!env.RELAYER_PRIVATE_KEY) return null;
-  return new ethers.Wallet(env.RELAYER_PRIVATE_KEY, provider);
+  relayer ??= new ethers.NonceManager(new ethers.Wallet(env.RELAYER_PRIVATE_KEY, provider));
+  return relayer;
 }
 
 export const ROLE_HASHES = {

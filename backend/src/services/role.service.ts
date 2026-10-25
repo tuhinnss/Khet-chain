@@ -9,6 +9,16 @@ const roleToOnChain: Record<string, string> = {
   retailer: ROLE_HASHES.RETAILER,
 };
 
+// Relayer transactions run one at a time so their nonces reach the node in
+// order (e.g. two admins approving at once; Hardhat's automine rejects a nonce
+// that arrives ahead of its predecessor).
+let relayerQueue: Promise<unknown> = Promise.resolve();
+function withRelayer<T>(task: () => Promise<T>): Promise<T> {
+  const run = relayerQueue.then(task);
+  relayerQueue = run.catch(() => undefined);
+  return run;
+}
+
 export async function checkOnChainRole(
   walletAddress: string,
   role: UserRole
@@ -37,27 +47,30 @@ export async function ensureOnChainRole(
     return { granted: false, error: "Relayer not configured — set RELAYER_PRIVATE_KEY in .env" };
   }
 
-  try {
-    const code = await provider.getCode(process.env.KHETCHAIN_CONTRACT_ADDRESS || "");
-    if (!code || code === "0x") {
-      return {
-        granted: false,
-        error: "Contract not deployed. Run: cd contracts && npm run deploy:local or npm run deploy:sepolia",
-      };
+  return withRelayer(async () => {
+    try {
+      const code = await provider.getCode(process.env.KHETCHAIN_CONTRACT_ADDRESS || "");
+      if (!code || code === "0x") {
+        return {
+          granted: false,
+          error: "Contract not deployed. Run: cd contracts && npm run deploy:local or npm run deploy:sepolia",
+        };
+      }
+
+      const contract = getContract(relayer);
+      const hasRole: boolean = await contract.hasRole(roleHash, walletAddress);
+      if (hasRole) return { granted: true };
+
+      await (await contract.grantUserRole(walletAddress, roleHash)).wait();
+      console.log(`Granted ${role} role on-chain to ${walletAddress}`);
+      return { granted: true };
+    } catch (err) {
+      relayer.reset(); // a failed send must not leave a nonce gap
+      const message = err instanceof Error ? err.message : "Role grant failed";
+      console.error("On-chain role grant failed:", err);
+      return { granted: false, error: message };
     }
-
-    const contract = getContract(relayer);
-    const hasRole: boolean = await contract.hasRole(roleHash, walletAddress);
-    if (hasRole) return { granted: true };
-
-    await (await contract.grantUserRole(walletAddress, roleHash)).wait();
-    console.log(`Granted ${role} role on-chain to ${walletAddress}`);
-    return { granted: true };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Role grant failed";
-    console.error("On-chain role grant failed:", err);
-    return { granted: false, error: message };
-  }
+  });
 }
 
 export async function revokeOnChainRole(
@@ -72,17 +85,20 @@ export async function revokeOnChainRole(
     return { revoked: false, error: "Relayer not configured — set RELAYER_PRIVATE_KEY in .env" };
   }
 
-  try {
-    const contract = getContract(relayer);
-    const hasRole: boolean = await contract.hasRole(roleHash, walletAddress);
-    if (!hasRole) return { revoked: true };
+  return withRelayer(async () => {
+    try {
+      const contract = getContract(relayer);
+      const hasRole: boolean = await contract.hasRole(roleHash, walletAddress);
+      if (!hasRole) return { revoked: true };
 
-    await (await contract.revokeUserRole(walletAddress, roleHash)).wait();
-    console.log(`Revoked ${role} role on-chain from ${walletAddress}`);
-    return { revoked: true };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Role revoke failed";
-    console.error("On-chain role revoke failed:", err);
-    return { revoked: false, error: message };
-  }
+      await (await contract.revokeUserRole(walletAddress, roleHash)).wait();
+      console.log(`Revoked ${role} role on-chain from ${walletAddress}`);
+      return { revoked: true };
+    } catch (err) {
+      relayer.reset(); // a failed send must not leave a nonce gap
+      const message = err instanceof Error ? err.message : "Role revoke failed";
+      console.error("On-chain role revoke failed:", err);
+      return { revoked: false, error: message };
+    }
+  });
 }
