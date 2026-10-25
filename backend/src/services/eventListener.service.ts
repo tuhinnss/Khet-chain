@@ -51,7 +51,7 @@ async function handleEvent(
 
   await EventLog.create({ eventName, batchId, txHash, blockNumber, args: args.toObject() });
 
-  if (eventName === "BatchRegistered" && batchId) {
+  if (eventName === "BatchCreated" && batchId) {
     await Batch.findOneAndUpdate(
       { batchId },
       {

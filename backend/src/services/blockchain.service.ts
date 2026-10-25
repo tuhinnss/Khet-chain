@@ -1,5 +1,4 @@
-import { ethers } from "ethers";
-import { getContract, provider } from "../config/blockchain.js";
+import { getContract } from "../config/blockchain.js";
 import { BATCH_STATUS_MAP, SupplyChainEventData } from "../types/index.js";
 
 export async function readBatch(batchId: number) {
@@ -21,7 +20,6 @@ export async function readBatch(batchId: number) {
     status: BATCH_STATUS_MAP[Number(batch.status)] ?? "Created",
     qrHash: batch.qrHash,
     createdAt: Number(batch.createdAt || 0),
-    active: batch.active !== undefined ? batch.active : true,
   };
 }
 
@@ -94,30 +92,4 @@ export async function readBids(batchId: number) {
     timestamp: new Date(Number(bid.timestamp) * 1000),
     active: bid.active,
   }));
-}
-
-export async function verifyOnChain(batchId: number, scannedHash: string) {
-  const contract = getContract();
-  const [authentic, batch] = await contract.verifyBatch.staticCall(batchId, scannedHash);
-  return {
-    authentic,
-    batch: {
-      batchId: Number(batch.batchId),
-      batchStringId: batch.batchStringId || `KHC-2026-${String(batch.batchId).padStart(6, "0")}`,
-      cropName: batch.cropName,
-      quantity: Number(batch.quantity),
-      unit: batch.unit || "kg",
-      currentOwner: batch.currentOwner,
-      status: BATCH_STATUS_MAP[Number(batch.status)] ?? "Created",
-      qrHash: batch.qrHash,
-    },
-  };
-}
-
-export async function waitForTx(tx: ethers.ContractTransactionResponse) {
-  const receipt = await tx.wait();
-  return {
-    txHash: receipt?.hash ?? tx.hash,
-    blockNumber: receipt?.blockNumber ?? 0,
-  };
 }

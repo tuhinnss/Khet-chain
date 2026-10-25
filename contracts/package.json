@@ -6,7 +6,6 @@
     "test": "hardhat test",
     "node": "hardhat node",
     "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
-    "deploy:amoy": "hardhat run scripts/deploy.ts --network amoy",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
     "grant-roles:local": "hardhat run scripts/grant-roles.ts --network localhost"
   },

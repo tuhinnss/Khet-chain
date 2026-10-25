@@ -35,9 +35,9 @@ export async function syncBatch(req: AuthRequest, res: Response): Promise<void> 
 
   const wallet = req.user!.walletAddress;
   const receipt = await verifyTxFromWallet(txHash, wallet);
-  const parsed = parseEvent(receipt, "BatchCreated") || parseEvent(receipt, "BatchRegistered");
+  const parsed = parseEvent(receipt, "BatchCreated");
   if (!parsed) {
-    res.status(400).json({ success: false, error: { message: "BatchCreated/BatchRegistered event not found" } });
+    res.status(400).json({ success: false, error: { message: "BatchCreated event not found" } });
     return;
   }
 

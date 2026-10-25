@@ -6,7 +6,7 @@ A tomato can pass through a farmer, a distributor, a wholesaler, and a retailer 
 
 **KhetChain puts the produce's entire journey on-chain.** Every harvest, every price, every cold-chain checkpoint, every change of ownership — written to Ethereum Sepolia the moment it happens, signed by the wallet of the person who did it, and impossible to quietly edit afterward. A consumer scans one QR code and sees the whole thing: farm, farmer, price at every stage, quality checks, and the timestamped chain of custody, all the way back to harvest. No login, no wallet, no app.
 
-Built for the **PS451** problem statement — see [`PS451.pdf`](PS451.pdf) for the original problem statement and proposed solution, also linked from the app's home page.
+Built for the **PS451** problem statement — see [`PS451.pdf`](frontend/public/docs/PS451.pdf) for the original problem statement and proposed solution, also linked from the app's home page.
 
 ## See it
 

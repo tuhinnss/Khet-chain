@@ -37,7 +37,6 @@ app.use(express.json());
 
 const NETWORK_NAMES: Record<number, string> = {
   11155111: "Ethereum Sepolia",
-  80002: "Polygon Amoy",
   31337: "Hardhat Local",
 };
 
@@ -53,7 +52,6 @@ app.get("/health", (_req, res) =>
 // API routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/batch", batchRoutes);
-app.use("/api/v1/batches", batchRoutes);
 app.use("/api/v1/supplychain", supplyChainRoutes);
 app.use("/api/v1/qr", qrRoutes);
 app.use("/api/v1/listing", listingRoutes);
@@ -62,12 +60,6 @@ app.use("/api/v1", transferRoutes);
 app.use("/api/v1/history", historyRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/admin", adminRoutes);
-
-// Convenience aliases for direct root API calls
-app.use("/api/batches", batchRoutes);
-app.use("/api/qr", qrRoutes);
-app.use("/api/supplychain", supplyChainRoutes);
-app.use("/api/users", authRoutes);
 
 app.use(errorHandler);
 

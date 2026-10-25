@@ -35,14 +35,13 @@ describe("KhetChain Smart Contract", () => {
     await contract.grantUserRole(dealer2.address, DEALER_ROLE);
   });
 
+  // Registers a batch as `farmer` with defaults for the descriptive fields.
+  async function registerBatchAsFarmer(crop: string, quantity: number, harvestDate: number, location: string) {
+    return contract.connect(farmer).registerBatch(crop, quantity, "kg", harvestDate, location, "Standard", "", 0, QR_HASH);
+  }
+
   async function registerSimpleBatch(crop = "Wheat") {
-    await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
-      crop,
-      100,
-      1700000000,
-      "Punjab",
-      QR_HASH
-    );
+    await registerBatchAsFarmer(crop, 100, 1700000000, "Punjab");
   }
 
   // Lists batch `id` and sells it to the distributor, who becomes the custodian.
@@ -82,13 +81,7 @@ describe("KhetChain Smart Contract", () => {
   });
 
   it("2. Retrieve batch: fetches accurate batch information and initial harvest event", async () => {
-    await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
-      "Wheat",
-      1000,
-      1700000000,
-      "Punjab, India",
-      QR_HASH
-    );
+    await registerBatchAsFarmer("Wheat", 1000, 1700000000, "Punjab, India");
 
     const batch = await contract.getBatch(1);
     expect(batch.cropName).to.equal("Wheat");
@@ -101,13 +94,7 @@ describe("KhetChain Smart Contract", () => {
   });
 
   it("3. Add supply chain event: logs checkpoints along the supply chain", async () => {
-    await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
-      "Alphonso Mango",
-      200,
-      1700000000,
-      "Ratnagiri, MH",
-      QR_HASH
-    );
+    await registerBatchAsFarmer("Alphonso Mango", 200, 1700000000, "Ratnagiri, MH");
     await sellToDistributor(1);
 
     const event = {
@@ -136,13 +123,7 @@ describe("KhetChain Smart Contract", () => {
   });
 
   it("4. Transfer ownership: enables custody transfer from Distributor to Wholesaler to Retailer", async () => {
-    await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
-      "Basmati Rice",
-      800,
-      1700000000,
-      "Haryana",
-      QR_HASH
-    );
+    await registerBatchAsFarmer("Basmati Rice", 800, 1700000000, "Haryana");
 
     // Farmer creates listing & Distributor buys
     await contract.connect(farmer).createListing(1, ethers.parseEther("0.5"));
@@ -189,13 +170,7 @@ describe("KhetChain Smart Contract", () => {
   });
 
   it("5. Checkpoint price: records an INR provenance price without touching the asking price", async () => {
-    await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
-      "Organic Apples",
-      300,
-      1700000000,
-      "Shimla, HP",
-      QR_HASH
-    );
+    await registerBatchAsFarmer("Organic Apples", 300, 1700000000, "Shimla, HP");
     await contract.connect(farmer).createListing(1, ethers.parseEther("0.1"));
 
     const priceEvent = {
@@ -244,13 +219,7 @@ describe("KhetChain Smart Contract", () => {
   });
 
   it("6. Quality check: logs quality checkpoint and emits event", async () => {
-    await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
-      "Grapes",
-      150,
-      1700000000,
-      "Nashik, MH",
-      QR_HASH
-    );
+    await registerBatchAsFarmer("Grapes", 150, 1700000000, "Nashik, MH");
     await sellToDistributor(1);
 
     const qualityEvent = {
@@ -273,18 +242,12 @@ describe("KhetChain Smart Contract", () => {
   });
 
   it("7. Unauthorized transfer: prevents non-owners from transferring batch", async () => {
-    await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
-      "Potatoes",
-      500,
-      1700000000,
-      "UP, India",
-      QR_HASH
-    );
+    await registerBatchAsFarmer("Potatoes", 500, 1700000000, "UP, India");
 
     // Wholesaler is not the owner yet (farmer is)
     await expect(
-      contract.connect(wholesaler)["transferOwnership(uint256,address)"](1, retailer.address)
-    ).to.be.revertedWith("Not owner");
+      contract.connect(wholesaler).transferOwnership(1, retailer.address, "RETAILER", "", "", "", "GOOD", 0)
+    ).to.be.revertedWith("Not current batch owner");
   });
 
   it("8. Invalid batch: querying nonexistent batch reverts with 'Batch not found'", async () => {
@@ -322,20 +285,9 @@ describe("KhetChain Smart Contract", () => {
     ).to.be.revertedWith("Quantity required");
   });
 
-  it("10. Event emission: verifies QR hash and emits QRVerified event", async () => {
-    await contract.connect(farmer)["registerBatch(string,uint256,uint256,string,bytes32)"](
-      "Mustard Seeds",
-      100,
-      1700000000,
-      "Rajasthan",
-      QR_HASH
-    );
-
-    await expect(contract.connect(consumer).verifyBatch(1, QR_HASH))
-      .to.emit(contract, "QRVerified");
-
-    const [authentic] = await contract.verifyBatch.staticCall(1, QR_HASH);
-    expect(authentic).to.equal(true);
+  it("10. QR hash: registration stores the label's hash for off-chain verification", async () => {
+    await registerBatchAsFarmer("Mustard Seeds", 100, 1700000000, "Rajasthan");
+    expect((await contract.getBatch(1)).qrHash).to.equal(QR_HASH);
   });
 
   describe("Registrar role", () => {
@@ -434,12 +386,7 @@ describe("KhetChain Smart Contract", () => {
       await contract.connect(farmer).createListing(1, ethers.parseEther("0.1"));
 
       await expect(
-        contract.connect(farmer)["transferOwnership(uint256,address)"](1, wholesaler.address)
-      ).to.be.revertedWith("Batch is listed for sale");
-      await expect(
-        contract.connect(farmer)["transferOwnership(uint256,address,string,string,string,string,string,uint256)"](
-          1, wholesaler.address, "WHOLESALER", "", "", "", "GOOD", 0
-        )
+        contract.connect(farmer).transferOwnership(1, wholesaler.address, "WHOLESALER", "", "", "", "GOOD", 0)
       ).to.be.revertedWith("Batch is listed for sale");
     });
 
@@ -447,7 +394,7 @@ describe("KhetChain Smart Contract", () => {
       const farmer2 = consumer;
       await contract.grantUserRole(farmer2.address, FARMER_ROLE);
       await registerSimpleBatch();
-      await contract.connect(farmer)["transferOwnership(uint256,address)"](1, farmer2.address);
+      await contract.connect(farmer).transferOwnership(1, farmer2.address, "FARMER", "", "", "", "GOOD", 0);
       await contract.connect(farmer2).createListing(1, ethers.parseEther("0.1"));
       await contract.connect(distributor).placeBid(1, { value: ethers.parseEther("0.1") });
 

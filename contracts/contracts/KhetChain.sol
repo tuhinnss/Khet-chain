@@ -63,7 +63,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         BatchStatus status;
         bytes32 qrHash;
         uint256 createdAt;
-        bool active;
     }
 
     struct Bid {
@@ -89,7 +88,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     mapping(uint256 => SupplyChainEvent[]) private batchEvents;
     mapping(uint256 => ProvenanceRecord[]) private batchHistory;
     mapping(uint256 => Bid[]) private batchBids;
-    mapping(uint256 => uint256) public acceptedBidIndex;
     mapping(uint256 => mapping(address => uint256)) public dealerBidIndex;
 
     event BatchCreated(
@@ -99,13 +97,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         string cropName,
         uint256 quantity,
         string unit,
-        bytes32 qrHash
-    );
-
-    event BatchRegistered(
-        uint256 indexed batchId,
-        address indexed farmer,
-        string cropName,
         bytes32 qrHash
     );
 
@@ -141,9 +132,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         BatchStatus oldStatus,
         BatchStatus newStatus
     );
-    event PriceUpdated(uint256 indexed batchId, uint256 oldPrice, uint256 newPrice);
     event QualityChecked(uint256 indexed batchId, address indexed inspector, string quality);
-    event QRVerified(uint256 indexed batchId, address indexed verifier, uint256 timestamp);
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -253,8 +242,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
             currentPrice: 0,
             status: BatchStatus.Created,
             qrHash: qrHash,
-            createdAt: block.timestamp,
-            active: true
+            createdAt: block.timestamp
         });
 
         // Record initial harvest supply chain event
@@ -276,7 +264,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         _recordProvenance(batchId, address(0), msg.sender, BatchStatus.Created, "Harvest registered on-chain");
 
         emit BatchCreated(batchId, batchStr, msg.sender, cropName, quantity, batches[batchId].unit, qrHash);
-        emit BatchRegistered(batchId, msg.sender, cropName, qrHash);
         emit SupplyChainEventAdded(batchId, msg.sender, "FARMER", "HARVESTED", initialPrice, "GOOD", location, block.timestamp);
 
         return batchId;
@@ -312,29 +299,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @notice Backward compatible registerBatch overload
-     */
-    function registerBatch(
-        string calldata cropName,
-        uint256 quantity,
-        uint256 harvestDate,
-        string calldata location,
-        bytes32 qrHash
-    ) external onlyRole(FARMER_ROLE) whenNotPaused returns (uint256) {
-        return _registerBatch(
-            cropName,
-            quantity,
-            "kg",
-            harvestDate,
-            location,
-            "Standard",
-            "",
-            0,
-            qrHash
-        );
-    }
-
-    /**
      * @notice Adds an immutable supply chain event (Quality Check, Storage Update, Transport, etc.)
      */
     function addSupplyChainEvent(
@@ -342,7 +306,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         SupplyChainEvent calldata evt
     ) external whenNotPaused {
         ProduceBatch storage batch = _getBatch(batchId);
-        require(batch.active, "Batch inactive");
         // Only the custodian (or an admin) may append to a batch's record. Any
         // role holder being allowed here let buyers reprice listings they bid on.
         require(
@@ -428,38 +391,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
             location,
             block.timestamp
         );
-    }
-
-    /**
-     * @notice Simplified transfer ownership matching original signature
-     */
-    function transferOwnership(uint256 batchId, address newOwner) external whenNotPaused {
-        ProduceBatch storage batch = _getBatch(batchId);
-        require(batch.currentOwner == msg.sender, "Not owner");
-        _requireNotListed(batch);
-        require(newOwner != address(0), "Invalid address");
-        require(newOwner != msg.sender, "Same owner");
-
-        address previousOwner = batch.currentOwner;
-        batch.currentOwner = newOwner;
-
-        SupplyChainEvent memory transferEvent = SupplyChainEvent({
-            actor: msg.sender,
-            actorRole: "ACTOR",
-            action: "TRANSFERRED",
-            price: 0,
-            quantity: batch.quantity,
-            location: batch.location,
-            quality: "GOOD",
-            transportDetails: "Standard custody transfer",
-            storageDetails: "In transit/warehouse",
-            timestamp: block.timestamp,
-            metadataURI: ""
-        });
-        batchEvents[batchId].push(transferEvent);
-
-        _recordProvenance(batchId, previousOwner, newOwner, batch.status, "transferred");
-        emit OwnershipTransferred(batchId, previousOwner, newOwner);
     }
 
     function createListing(uint256 batchId, uint256 price)
@@ -587,7 +518,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         address dealer = winningBid.dealer;
         uint256 amount = winningBid.amount;
         winningBid.active = false;
-        acceptedBidIndex[batchId] = bidIndex;
         // Losing bids stay active and are reclaimed by their owners via withdrawBid.
         // Pushing refunds here let one reverting bidder (or too many bids) block
         // the sale forever.
@@ -639,15 +569,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         emit StatusUpdated(batchId, oldStatus, newStatus);
     }
 
-    function verifyBatch(uint256 batchId, bytes32 scannedHash)
-        external
-        returns (bool authentic, ProduceBatch memory batch)
-    {
-        batch = _getBatch(batchId);
-        authentic = batch.qrHash == scannedHash && batch.qrHash != bytes32(0);
-        emit QRVerified(batchId, msg.sender, block.timestamp);
-    }
-
     function getBatch(uint256 batchId) external view returns (ProduceBatch memory) {
         return _getBatch(batchId);
     }
@@ -663,15 +584,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
 
     function getBids(uint256 batchId) external view returns (Bid[] memory) {
         return batchBids[batchId];
-    }
-
-    function generateQRMetadata(uint256 batchId)
-        external
-        view
-        returns (uint256 id, string memory stringId, bytes32 qrHash, string memory cropName, BatchStatus status)
-    {
-        ProduceBatch memory batch = _getBatch(batchId);
-        return (batch.batchId, batch.batchStringId, batch.qrHash, batch.cropName, batch.status);
     }
 
     function _getBatch(uint256 batchId) internal view returns (ProduceBatch storage batch) {
