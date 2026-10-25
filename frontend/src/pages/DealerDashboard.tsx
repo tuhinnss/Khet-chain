@@ -9,8 +9,10 @@ import { syncRole, getRoleStatus } from "../api/auth.api";
 import { useAuth } from "../context/AuthContext";
 import StatusBadge from "../components/common/StatusBadge";
 import QRScanner from "../components/qr/QRScanner";
+import ReclaimBidCard from "../components/bid/ReclaimBidCard";
 import { Listing } from "../types";
 import { getErrorMessage } from "../utils/errors";
+import { parseQrPayload, tracePath } from "../utils/qr";
 
 export default function DealerDashboard() {
   const { user } = useAuth();
@@ -67,13 +69,14 @@ export default function DealerDashboard() {
   }
 
   function handleScan(data: string) {
-    try {
-      const parsed = JSON.parse(data);
-      setScanResult(`Batch #${parsed.batchId} — ${parsed.verify}`);
-      window.location.href = parsed.verify || `/verify/${parsed.batchId}`;
-    } catch {
+    const scanned = parseQrPayload(data);
+    if (!scanned) {
       setScanResult(data);
+      return;
     }
+    setScanResult(`Batch #${scanned.batchId}`);
+    // Keep the label secret so the trace page can check authenticity.
+    window.location.href = tracePath(scanned.batchId, scanned.secret);
   }
 
   async function markInTransit(batchId: number) {
@@ -157,6 +160,8 @@ export default function DealerDashboard() {
           ))}
         </div>
       </section>
+
+      <ReclaimBidCard />
     </div>
   );
 }

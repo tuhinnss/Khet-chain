@@ -1,13 +1,42 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
-import { User } from "../models/User.js";
+import { IUser, User } from "../models/User.js";
+import { env } from "../config/env.js";
 import { signToken } from "../utils/jwt.js";
 import { buildSignMessage, verifyWalletSignature } from "../utils/wallet.js";
 import { checkOnChainRole, ensureOnChainRole } from "../services/role.service.js";
 import { AuthRequest, UserRole } from "../types/index.js";
 
 const loginNonces = new Map<string, string>();
+
+export const ACTOR_ROLES: UserRole[] = ["farmer", "distributor", "wholesaler", "dealer", "retailer"];
+
+function isAdminWallet(walletAddress: string): boolean {
+  return env.ADMIN_WALLETS.includes(walletAddress.toLowerCase());
+}
+
+export function publicUser(user: IUser) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    walletAddress: user.walletAddress,
+    businessName: user.businessName,
+    approvalStatus: user.approvalStatus,
+  };
+}
+
+function session(user: IUser) {
+  const token = signToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    walletAddress: user.walletAddress,
+  });
+  return { token, user: publicUser(user) };
+}
 
 export async function getNonce(req: Request, res: Response): Promise<void> {
   const { walletAddress } = req.body as { walletAddress?: string };
@@ -54,18 +83,26 @@ async function registerUser(req: Request, res: Response): Promise<void> {
     businessName?: string;
   };
 
-  if (!email || !password || !name || !role || !walletAddress || !signature || !message) {
+  if (![email, password, name, role, walletAddress, signature, message].every((v) => typeof v === "string" && v)) {
     res.status(400).json({ success: false, error: { message: "Missing required fields" } });
     return;
   }
 
-  if (!["farmer", "distributor", "wholesaler", "dealer", "retailer"].includes(role)) {
+  const isAdmin = role === "admin";
+  if (!isAdmin && !ACTOR_ROLES.includes(role)) {
     res.status(400).json({ success: false, error: { message: "Invalid role" } });
     return;
   }
 
   if (!verifyWalletSignature(message, signature, walletAddress)) {
     res.status(401).json({ success: false, error: { message: "Invalid wallet signature" } });
+    return;
+  }
+
+  // The signature above proves wallet ownership, so only an allow-listed
+  // wallet's holder can create the admin account.
+  if (isAdmin && !isAdminWallet(walletAddress)) {
+    res.status(403).json({ success: false, error: { message: "This wallet is not authorized to register as admin" } });
     return;
   }
 
@@ -84,27 +121,13 @@ async function registerUser(req: Request, res: Response): Promise<void> {
     role,
     walletAddress: walletAddress.toLowerCase(),
     businessName: businessName || undefined,
+    approvalStatus: isAdmin ? "approved" : "pending",
   });
 
-  const token = signToken({
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-    walletAddress: user.walletAddress,
-  });
-
+  // Actors get no session until an admin approves them and their role is granted on-chain.
   res.status(201).json({
     success: true,
-    data: {
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        walletAddress: user.walletAddress,
-      },
-    },
+    data: isAdmin ? session(user) : { user: publicUser(user) },
   });
 }
 
@@ -116,6 +139,12 @@ export async function login(req: Request, res: Response): Promise<void> {
     signature: string;
     message: string;
   };
+
+  // Also blocks operator objects like { "$ne": null } reaching the Mongo query.
+  if (![email, password, walletAddress, signature, message].every((v) => typeof v === "string" && v)) {
+    res.status(400).json({ success: false, error: { message: "Missing required fields" } });
+    return;
+  }
 
   const user = await User.findOne({ email });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -135,6 +164,26 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   loginNonces.delete(walletAddress.toLowerCase());
 
+  if (user.role === "admin") {
+    // Removing a wallet from ADMIN_WALLETS revokes admin access at next login.
+    if (!isAdminWallet(user.walletAddress)) {
+      res.status(403).json({ success: false, error: { message: "This wallet is no longer an authorized admin" } });
+      return;
+    }
+    res.json({ success: true, data: session(user) });
+    return;
+  }
+
+  if (user.approvalStatus !== "approved") {
+    const message =
+      user.approvalStatus === "rejected"
+        ? "Your registration was rejected by an administrator"
+        : "Your account is awaiting admin approval";
+    res.status(403).json({ success: false, error: { message } });
+    return;
+  }
+
+  // Approved users are re-granted here, e.g. after the contract is redeployed.
   const roleResult = await ensureOnChainRole(walletAddress, user.role);
   if (!roleResult.granted) {
     res.status(503).json({
@@ -148,26 +197,7 @@ export async function login(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const token = signToken({
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-    walletAddress: user.walletAddress,
-  });
-
-  res.json({
-    success: true,
-    data: {
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        walletAddress: user.walletAddress,
-      },
-    },
-  });
+  res.json({ success: true, data: session(user) });
 }
 
 export async function me(req: AuthRequest, res: Response): Promise<void> {
@@ -177,6 +207,13 @@ export async function me(req: AuthRequest, res: Response): Promise<void> {
 
 export async function syncRole(req: AuthRequest, res: Response): Promise<void> {
   const { walletAddress, role } = req.user!;
+  // Check the live record, not the JWT: a token issued before rejection is still valid.
+  const user = await User.findById(req.user!.userId);
+  if (!user || user.role === "admin" || user.approvalStatus !== "approved") {
+    res.status(403).json({ success: false, error: { message: "Account is not approved for an on-chain role" } });
+    return;
+  }
+
   const result = await ensureOnChainRole(walletAddress, role);
   if (!result.granted) {
     res.status(503).json({

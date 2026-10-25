@@ -1,6 +1,8 @@
 import mongoose, { Schema, Document } from "mongoose";
 import { UserRole } from "../types/index.js";
 
+export type ApprovalStatus = "pending" | "approved" | "rejected";
+
 export interface IUser extends Document {
   email: string;
   passwordHash: string;
@@ -10,6 +12,7 @@ export interface IUser extends Document {
   businessName?: string;
   location?: string;
   isActive: boolean;
+  approvalStatus: ApprovalStatus;
 }
 
 const userSchema = new Schema<IUser>(
@@ -26,10 +29,18 @@ const userSchema = new Schema<IUser>(
     businessName: String,
     location: String,
     isActive: { type: Boolean, default: true },
+    // A self-chosen role only becomes an on-chain role once an admin approves it.
+    // Documents saved before this field existed load as "pending" (fail closed).
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
   },
   { timestamps: true }
 );
 
 userSchema.index({ walletAddress: 1 });
+userSchema.index({ approvalStatus: 1 });
 
 export const User = mongoose.model<IUser>("User", userSchema);

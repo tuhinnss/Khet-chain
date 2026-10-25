@@ -17,7 +17,8 @@ export async function register(payload: {
   businessName?: string;
 }) {
   const { data } = await api.post("/auth/register", payload);
-  return data.data as { token: string; user: User };
+  // No token until an admin approves the account (admins are approved on registration).
+  return data.data as { token?: string; user: User };
 }
 
 export async function syncRole() {

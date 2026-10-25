@@ -2,13 +2,12 @@ import { Response } from "express";
 import { AuthRequest } from "../types/index.js";
 import { Batch } from "../models/Batch.js";
 import { TransferHistory } from "../models/TransferHistory.js";
-import { parseEvent, verifyTxFromWallet } from "../services/tx.service.js";
+import { claimTx, parseEvent, verifyTxFromWallet } from "../services/tx.service.js";
 import { BATCH_STATUS_MAP } from "../types/index.js";
 
 export async function transferOwnership(req: AuthRequest, res: Response): Promise<void> {
-  const { batchId, newOwner, txHash, toRole } = req.body as {
+  const { batchId, txHash, toRole } = req.body as {
     batchId: number;
-    newOwner: string;
     txHash: string;
     toRole?: string;
   };
@@ -20,7 +19,9 @@ export async function transferOwnership(req: AuthRequest, res: Response): Promis
     res.status(400).json({ success: false, error: { message: "OwnershipTransferred event not found" } });
     return;
   }
+  await claimTx(txHash, "ownership-transferred", wallet);
 
+  const newOwner = parsed.args.to as string;
   const batch = await Batch.findOne({ batchId });
   await Batch.updateOne({ batchId }, { currentOwner: newOwner.toLowerCase() });
 
@@ -54,6 +55,7 @@ export async function updateStatus(req: AuthRequest, res: Response): Promise<voi
     res.status(400).json({ success: false, error: { message: "StatusUpdated event not found" } });
     return;
   }
+  await claimTx(txHash, "status-updated", wallet);
 
   const newStatus = BATCH_STATUS_MAP[Number(parsed.args.newStatus)] ?? status;
   await Batch.updateOne({ batchId, currentOwner: wallet }, { status: newStatus, [`txHashes.${newStatus}`]: txHash });

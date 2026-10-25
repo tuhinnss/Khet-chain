@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { connectWallet, signMessage, ensureSepoliaNetwork } from "../hooks/useWallet";
 import { UserRole } from "../types";
 import { getErrorMessage } from "../utils/errors";
+import { dashboardPathFor } from "../utils/constants";
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -16,6 +17,7 @@ export default function Register() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
   const { setSession } = useAuth();
   const navigate = useNavigate();
 
@@ -38,19 +40,34 @@ export default function Register() {
         signature,
         message,
       });
+      if (!token) {
+        setAwaitingApproval(true);
+        return;
+      }
       setSession(token, user);
-
-      // Route by role
-      if (user.role === "farmer") navigate("/farmer");
-      else if (user.role === "distributor" || user.role === "dealer") navigate("/distributor");
-      else if (user.role === "wholesaler") navigate("/wholesaler");
-      else if (user.role === "retailer") navigate("/retailer");
-      else navigate("/");
+      navigate(dashboardPathFor(user.role));
     } catch (err) {
       setError(getErrorMessage(err, "Registration failed"));
     } finally {
       setLoading(false);
     }
+  }
+
+  if (awaitingApproval) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <h1>Registration Received</h1>
+          <p className="subtitle">
+            An administrator must approve your account before your {form.role} role is granted on-chain.
+            You can sign in once you've been approved.
+          </p>
+          <p className="auth-footer">
+            <Link to="/login">Go to Login</Link>
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -100,6 +117,7 @@ export default function Register() {
               <option value="distributor">🚛 Distributor / Logistics Trader</option>
               <option value="wholesaler">🏪 Wholesaler / Mandi Operator</option>
               <option value="retailer">🛒 Retailer / Supermarket</option>
+              <option value="admin">🛡️ Platform Admin (allow-listed wallets only)</option>
             </select>
           </label>
           <label>

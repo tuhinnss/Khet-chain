@@ -92,6 +92,13 @@ async function handleEvent(
     await Bid.updateMany({ batchId, status: "pending" }, { status: "rejected" });
   }
 
+  if (eventName === "BidWithdrawn" && batchId) {
+    await Bid.updateMany(
+      { batchId, dealerAddress: args.dealer.toLowerCase(), status: { $in: ["pending", "rejected"] } },
+      { status: "withdrawn" }
+    );
+  }
+
   if (eventName === "OwnershipTransferred" && batchId) {
     await Batch.updateOne({ batchId }, { currentOwner: args.to.toLowerCase() });
     await TransferHistory.create({

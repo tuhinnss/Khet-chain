@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from "react";
 import QRCode from "qrcode";
+import { isLabelUrl } from "../../utils/qr";
 
 interface QRGeneratorProps {
   batchId: number | string;
   batchStringId?: string;
   cropName?: string;
+  /** Pass the label URL from the API (carries the QR secret) to print an authenticity label. */
   url?: string;
   showDetails?: boolean;
 }
@@ -22,6 +24,7 @@ export default function QRGenerator({
 
   const displayId = batchStringId || `KHC-2026-${String(batchId).padStart(6, "0")}`;
   const targetUrl = url || `${window.location.origin}/trace/${batchId}`;
+  const isLabel = isLabelUrl(targetUrl);
 
   useEffect(() => {
     QRCode.toDataURL(targetUrl, {
@@ -60,7 +63,7 @@ export default function QRGenerator({
   return (
     <div className="qr-generator-card" ref={printRef}>
       <div className="qr-header">
-        <span className="qr-badge">KHETCHAIN VERIFIED</span>
+        <span className="qr-badge">{isLabel ? "KHETCHAIN AUTHENTICITY LABEL" : "KHETCHAIN TRACE LINK"}</span>
         <h4>{cropName ? `${cropName} — ` : ""}{displayId}</h4>
       </div>
 
@@ -75,7 +78,9 @@ export default function QRGenerator({
       {showDetails && (
         <div className="qr-meta-info">
           <p className="qr-instruction">
-            Scan with smartphone camera to view immutable supply chain journey.
+            {isLabel
+              ? "Print and attach to the package. Scanning it verifies authenticity against the on-chain record, so don't post this code publicly."
+              : "Opens the public supply chain journey. This is a share link, not an authenticity label."}
           </p>
           <div className="qr-url-row">
             <code className="qr-url-text">{targetUrl}</code>

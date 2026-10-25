@@ -9,6 +9,7 @@ import dashboardRoutes from "./routes/dashboard.routes.js";
 import historyRoutes from "./routes/history.routes.js";
 import supplyChainRoutes from "./routes/supplychain.routes.js";
 import qrRoutes from "./routes/qr.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { env } from "./config/env.js";
 
@@ -60,6 +61,7 @@ app.use("/api/v1/bid", bidRoutes);
 app.use("/api/v1", transferRoutes);
 app.use("/api/v1/history", historyRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/admin", adminRoutes);
 
 // Convenience aliases for direct root API calls
 app.use("/api/batches", batchRoutes);

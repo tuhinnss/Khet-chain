@@ -1,39 +1,37 @@
-import { Request, Response } from "express";
-import QRCode from "qrcode";
+import { Response } from "express";
+import { AuthRequest } from "../types/index.js";
 import { Batch } from "../models/Batch.js";
-import { env } from "../config/env.js";
+import { buildVerificationUrl, generateQRCode } from "../services/qr.service.js";
 
-export async function generateQR(req: Request, res: Response): Promise<void> {
+/** The printable authenticity label. It embeds the batch secret, so only its custodians get it. */
+export async function generateQR(req: AuthRequest, res: Response): Promise<void> {
   const batchId = Number(req.params.batchId || req.params.id);
-  const frontendUrl = env.FRONTEND_URL || "http://localhost:5173";
-  const traceUrl = `${frontendUrl}/trace/${batchId}`;
-
-  try {
-    const dataUrl = await QRCode.toDataURL(traceUrl, {
-      errorCorrectionLevel: "H",
-      margin: 2,
-      width: 400,
-      color: {
-        dark: "#1b4332",
-        light: "#ffffff",
-      },
-    });
-
-    // Also update batch cache if it exists
-    await Batch.findOneAndUpdate({ batchId }, { qrCodeDataUrl: dataUrl, verificationUrl: traceUrl });
-
-    res.json({
-      success: true,
-      data: {
-        batchId,
-        url: traceUrl,
-        qrCodeDataUrl: dataUrl,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: { message: "Failed to generate QR code" },
-    });
+  const batch = await Batch.findOne({ batchId }).select("+qrSecret");
+  if (!batch) {
+    res.status(404).json({ success: false, error: { message: "Batch not found" } });
+    return;
   }
+
+  const wallet = req.user!.walletAddress.toLowerCase();
+  if (wallet !== batch.farmerAddress && wallet !== batch.currentOwner) {
+    res.status(403).json({
+      success: false,
+      error: { message: "Only the batch's farmer or current custodian can print its QR label" },
+    });
+    return;
+  }
+
+  if (!batch.qrSecret) {
+    res.status(404).json({ success: false, error: { message: "No QR secret on record for this batch" } });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      batchId,
+      url: buildVerificationUrl(batchId, batch.qrSecret),
+      qrCodeDataUrl: await generateQRCode(batchId, batch.qrSecret),
+    },
+  });
 }

@@ -14,12 +14,26 @@ dotenv.config({ path: join(__dirname, "../../../.env") });
 const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   MONGODB_URI: z.string().default("mongodb://localhost:27017/khetchain"),
-  USE_MEMORY_DB: z.coerce.boolean().default(false),
+  // Not z.coerce.boolean(): that is Boolean(str), which turns "false" into true.
+  USE_MEMORY_DB: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   JWT_SECRET: z.string().min(8).default("khetchain-dev-secret-change-me"),
   RPC_URL: z.string().default("http://127.0.0.1:8545"),
   CHAIN_ID: z.coerce.number().default(31337),
   KHETCHAIN_CONTRACT_ADDRESS: z.string().optional(),
   RELAYER_PRIVATE_KEY: z.string().optional(),
+  // Wallets allowed to hold the platform admin account (approves new users).
+  ADMIN_WALLETS: z
+    .string()
+    .optional()
+    .transform((v) =>
+      (v ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+    ),
   FRONTEND_URL: z.string().default("http://localhost:5173"),
 });
 

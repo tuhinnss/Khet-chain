@@ -18,6 +18,9 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     bytes32 public constant WHOLESALER_ROLE = keccak256("WHOLESALER_ROLE");
     bytes32 public constant DEALER_ROLE = keccak256("DEALER_ROLE"); // Alias / partner role for Distributor
     bytes32 public constant RETAILER_ROLE = keccak256("RETAILER_ROLE");
+    // Held by the backend relayer: may only grant/revoke the actor roles above,
+    // so a leaked server key can't pause the contract or mint admins.
+    bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR_ROLE");
 
     enum BatchStatus {
         Created,
@@ -80,7 +83,9 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
 
     uint256 public batchCounter;
 
-    mapping(uint256 => ProduceBatch) public batches;
+    // Private: getBatch() is the read API. A public getter duplicated the whole
+    // struct encoder and pushed the contract past the 24 KB EIP-170 size limit.
+    mapping(uint256 => ProduceBatch) private batches;
     mapping(uint256 => SupplyChainEvent[]) private batchEvents;
     mapping(uint256 => ProvenanceRecord[]) private batchHistory;
     mapping(uint256 => Bid[]) private batchBids;
@@ -118,6 +123,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     event ListingCreated(uint256 indexed batchId, uint256 price);
     event BidPlaced(uint256 indexed batchId, address indexed dealer, uint256 amount);
     event BidAccepted(uint256 indexed batchId, address indexed dealer, uint256 amount);
+    event BidWithdrawn(uint256 indexed batchId, address indexed dealer, uint256 amount);
     event OwnershipTransferred(
         uint256 indexed batchId,
         address indexed from,
@@ -152,7 +158,21 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         _unpause();
     }
 
-    function grantUserRole(address account, bytes32 role) external onlyRole(ADMIN_ROLE) {
+    function grantUserRole(address account, bytes32 role) external {
+        _checkRoleManager(role);
+        _grantRole(role, account);
+    }
+
+    function revokeUserRole(address account, bytes32 role) external {
+        _checkRoleManager(role);
+        _revokeRole(role, account);
+    }
+
+    function _checkRoleManager(bytes32 role) internal view {
+        require(
+            hasRole(ADMIN_ROLE, msg.sender) || hasRole(REGISTRAR_ROLE, msg.sender),
+            "Not role manager"
+        );
         require(
             role == FARMER_ROLE ||
             role == DISTRIBUTOR_ROLE ||
@@ -161,7 +181,6 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
             role == RETAILER_ROLE,
             "Invalid role"
         );
-        _grantRole(role, account);
     }
 
     function _uint2str(uint256 _i) internal pure returns (string memory _uintAsString) {
@@ -321,17 +340,18 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     ) external whenNotPaused {
         ProduceBatch storage batch = _getBatch(batchId);
         require(batch.active, "Batch inactive");
+        // Only the custodian (or an admin) may append to a batch's record. Any
+        // role holder being allowed here let buyers reprice listings they bid on.
         require(
-            batch.currentOwner == msg.sender ||
-            hasRole(ADMIN_ROLE, msg.sender) ||
-            hasRole(DISTRIBUTOR_ROLE, msg.sender) ||
-            hasRole(WHOLESALER_ROLE, msg.sender) ||
-            hasRole(DEALER_ROLE, msg.sender) ||
-            hasRole(RETAILER_ROLE, msg.sender),
+            batch.currentOwner == msg.sender || hasRole(ADMIN_ROLE, msg.sender),
             "Unauthorized actor"
         );
 
-        batchEvents[batchId].push(evt);
+        // Never trust caller-supplied attribution or timing in the provenance log.
+        SupplyChainEvent memory recorded = evt;
+        recorded.actor = msg.sender;
+        recorded.timestamp = block.timestamp;
+        batchEvents[batchId].push(recorded);
 
         if (evt.price > 0 && evt.price != batch.currentPrice) {
             uint256 oldPrice = batch.currentPrice;
@@ -347,7 +367,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
 
         emit SupplyChainEventAdded(
             batchId,
-            evt.actor != address(0) ? evt.actor : msg.sender,
+            msg.sender,
             evt.actorRole,
             evt.action,
             evt.price,
@@ -372,6 +392,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     ) external whenNotPaused {
         ProduceBatch storage batch = _getBatch(batchId);
         require(batch.currentOwner == msg.sender, "Not current batch owner");
+        _requireNotListed(batch);
         require(newOwner != address(0), "Invalid new owner");
         require(newOwner != msg.sender, "Cannot transfer to self");
 
@@ -418,6 +439,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     function transferOwnership(uint256 batchId, address newOwner) external whenNotPaused {
         ProduceBatch storage batch = _getBatch(batchId);
         require(batch.currentOwner == msg.sender, "Not owner");
+        _requireNotListed(batch);
         require(newOwner != address(0), "Invalid address");
         require(newOwner != msg.sender, "Same owner");
 
@@ -455,6 +477,7 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
             "Invalid status"
         );
 
+        BatchStatus oldStatus = batch.status;
         batch.currentPrice = price;
         batch.status = BatchStatus.Listed;
 
@@ -476,10 +499,10 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         _recordProvenance(batchId, msg.sender, msg.sender, BatchStatus.Listed, "listed");
 
         emit ListingCreated(batchId, price);
-        emit StatusUpdated(batchId, BatchStatus.Created, BatchStatus.Listed);
+        emit StatusUpdated(batchId, oldStatus, BatchStatus.Listed);
     }
 
-    function placeBid(uint256 batchId) external payable whenNotPaused {
+    function placeBid(uint256 batchId) external payable nonReentrant whenNotPaused {
         require(
             hasRole(DEALER_ROLE, msg.sender) || hasRole(DISTRIBUTOR_ROLE, msg.sender),
             "Must be Dealer/Distributor"
@@ -489,12 +512,13 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         require(msg.value > 0, "Bid amount required");
         require(msg.value >= batch.currentPrice || batch.currentPrice == 0, "Bid below asking price");
 
+        uint256 refund;
         uint256 existingIdx = dealerBidIndex[batchId][msg.sender];
         if (existingIdx > 0 && batchBids[batchId][existingIdx - 1].active) {
             Bid storage existing = batchBids[batchId][existingIdx - 1];
             require(msg.value > existing.amount, "Must exceed previous bid");
-            payable(msg.sender).transfer(existing.amount);
             existing.active = false;
+            refund = existing.amount;
         }
 
         batchBids[batchId].push(
@@ -509,6 +533,30 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         }
 
         emit BidPlaced(batchId, msg.sender, msg.value);
+
+        // Refunding the caller's own superseded bid is safe to push: a failing
+        // receiver can only block its own re-bid.
+        if (refund > 0) {
+            _sendValue(msg.sender, refund);
+        }
+    }
+
+    /**
+     * @notice Reclaim your escrowed bid. Open at any time for an active bid, so funds
+     * are never locked: before a sale it cancels the bid, after a sale it refunds a
+     * losing bid. Deliberately not paused, so users can exit during an incident.
+     */
+    function withdrawBid(uint256 batchId) external nonReentrant {
+        uint256 idx = dealerBidIndex[batchId][msg.sender];
+        require(idx > 0, "No bid");
+        Bid storage bid = batchBids[batchId][idx - 1];
+        require(bid.active, "Bid inactive");
+
+        bid.active = false;
+        uint256 amount = bid.amount;
+
+        emit BidWithdrawn(batchId, msg.sender, amount);
+        _sendValue(msg.sender, amount);
     }
 
     function acceptBid(uint256 batchId, uint256 bidIndex)
@@ -518,7 +566,9 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         whenNotPaused
     {
         ProduceBatch storage batch = _getBatch(batchId);
-        require(batch.farmerAddress == msg.sender, "Not farmer");
+        // Check custody, not authorship: the original farmer must not be able to
+        // sell a batch they have since transferred or already sold.
+        require(batch.currentOwner == msg.sender, "Not owner");
         require(
             batch.status == BatchStatus.BidReceived || batch.status == BatchStatus.Listed,
             "No bids to accept"
@@ -533,21 +583,15 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         uint256 amount = winningBid.amount;
         winningBid.active = false;
         acceptedBidIndex[batchId] = bidIndex;
-
-        for (uint256 i = 0; i < bids.length; i++) {
-            if (i != bidIndex && bids[i].active) {
-                payable(bids[i].dealer).transfer(bids[i].amount);
-                bids[i].active = false;
-            }
-        }
+        // Losing bids stay active and are reclaimed by their owners via withdrawBid.
+        // Pushing refunds here let one reverting bidder (or too many bids) block
+        // the sale forever.
 
         address previousOwner = batch.currentOwner;
         batch.currentOwner = dealer;
         batch.currentPrice = amount;
         BatchStatus oldStatus = batch.status;
         batch.status = BatchStatus.Sold;
-
-        payable(msg.sender).transfer(amount);
 
         SupplyChainEvent memory soldEvent = SupplyChainEvent({
             actor: dealer,
@@ -568,13 +612,22 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
         emit BidAccepted(batchId, dealer, amount);
         emit OwnershipTransferred(batchId, previousOwner, dealer);
         emit StatusUpdated(batchId, oldStatus, BatchStatus.Sold);
+
+        // Pay the seller last (checks-effects-interactions). The seller is the
+        // caller, so a failing receiver only blocks its own sale.
+        _sendValue(msg.sender, amount);
     }
 
+    /**
+     * @notice Advance a batch through logistics. Marketplace states (Listed, BidReceived,
+     * Sold) are only reachable through createListing / placeBid / acceptBid.
+     */
     function updateStatus(uint256 batchId, BatchStatus newStatus) external whenNotPaused {
         ProduceBatch storage batch = _getBatch(batchId);
         require(batch.currentOwner == msg.sender || hasRole(ADMIN_ROLE, msg.sender), "Not owner/admin");
 
         BatchStatus oldStatus = batch.status;
+        require(_isValidTransition(oldStatus, newStatus), "Invalid status transition");
         batch.status = newStatus;
 
         _recordProvenance(batchId, msg.sender, msg.sender, newStatus, "status_updated");
@@ -619,6 +672,30 @@ contract KhetChain is AccessControl, ReentrancyGuard, Pausable {
     function _getBatch(uint256 batchId) internal view returns (ProduceBatch storage batch) {
         batch = batches[batchId];
         require(batch.batchId != 0, "Batch not found");
+    }
+
+    /// @dev Bids are escrowed against the current owner, so custody can't move mid-sale.
+    function _requireNotListed(ProduceBatch storage batch) internal view {
+        require(
+            batch.status != BatchStatus.Listed && batch.status != BatchStatus.BidReceived,
+            "Batch is listed for sale"
+        );
+    }
+
+    function _isValidTransition(BatchStatus from, BatchStatus to) internal pure returns (bool) {
+        if (from == BatchStatus.Listed || from == BatchStatus.BidReceived || from == BatchStatus.Completed) {
+            return false;
+        }
+        if (to < BatchStatus.InTransit) {
+            return false;
+        }
+        // Forward only, except a delivered batch may ship again on its next hop.
+        return to > from || (from == BatchStatus.Delivered && to == BatchStatus.InTransit);
+    }
+
+    function _sendValue(address to, uint256 amount) internal {
+        (bool ok, ) = payable(to).call{value: amount}("");
+        require(ok, "ETH transfer failed");
     }
 
     function _recordProvenance(

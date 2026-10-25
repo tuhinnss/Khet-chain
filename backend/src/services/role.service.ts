@@ -59,3 +59,30 @@ export async function ensureOnChainRole(
     return { granted: false, error: message };
   }
 }
+
+export async function revokeOnChainRole(
+  walletAddress: string,
+  role: UserRole
+): Promise<{ revoked: boolean; error?: string }> {
+  const roleHash = roleToOnChain[role];
+  if (!roleHash) return { revoked: false, error: "Invalid role" };
+
+  const relayer = getRelayerSigner();
+  if (!relayer) {
+    return { revoked: false, error: "Relayer not configured — set RELAYER_PRIVATE_KEY in .env" };
+  }
+
+  try {
+    const contract = getContract(relayer);
+    const hasRole: boolean = await contract.hasRole(roleHash, walletAddress);
+    if (!hasRole) return { revoked: true };
+
+    await (await contract.revokeUserRole(walletAddress, roleHash)).wait();
+    console.log(`Revoked ${role} role on-chain from ${walletAddress}`);
+    return { revoked: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Role revoke failed";
+    console.error("On-chain role revoke failed:", err);
+    return { revoked: false, error: message };
+  }
+}

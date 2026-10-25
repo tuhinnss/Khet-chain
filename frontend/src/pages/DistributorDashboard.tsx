@@ -11,8 +11,10 @@ import { useAuth } from "../context/AuthContext";
 import StatusBadge from "../components/common/StatusBadge";
 import QRScanner from "../components/qr/QRScanner";
 import TransactionBadge from "../components/common/TransactionBadge";
+import ReclaimBidCard from "../components/bid/ReclaimBidCard";
 import { Listing, Batch } from "../types";
 import { getErrorMessage } from "../utils/errors";
+import { parseQrPayload } from "../utils/qr";
 
 export default function DistributorDashboard() {
   const { user } = useAuth();
@@ -74,13 +76,8 @@ export default function DistributorDashboard() {
   }
 
   function handleQRScan(data: string) {
-    try {
-      const parsed = JSON.parse(data);
-      handleSearchBatch(parsed.batchId);
-    } catch {
-      const match = data.match(/(\d+)/);
-      if (match) handleSearchBatch(Number(match[1]));
-    }
+    const scanned = parseQrPayload(data);
+    if (scanned) handleSearchBatch(scanned.batchId);
   }
 
   async function submitBid(batchId: number) {
@@ -428,6 +425,8 @@ export default function DistributorDashboard() {
           </div>
         )}
       </section>
+
+      <ReclaimBidCard />
     </div>
   );
 }

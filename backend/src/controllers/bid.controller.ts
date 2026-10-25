@@ -1,15 +1,15 @@
 import { Response } from "express";
+import { formatEther } from "ethers";
 import { AuthRequest } from "../types/index.js";
 import { Bid } from "../models/Bid.js";
 import { Listing } from "../models/Listing.js";
 import { Batch } from "../models/Batch.js";
-import { parseEvent, verifyTxFromWallet } from "../services/tx.service.js";
+import { claimTx, parseEvent, verifyTxFromWallet } from "../services/tx.service.js";
 import { readBids } from "../services/blockchain.service.js";
 
 export async function placeBid(req: AuthRequest, res: Response): Promise<void> {
-  const { batchId, amount, txHash } = req.body as {
+  const { batchId, txHash } = req.body as {
     batchId: number;
-    amount: string;
     txHash: string;
   };
 
@@ -26,7 +26,10 @@ export async function placeBid(req: AuthRequest, res: Response): Promise<void> {
     res.status(404).json({ success: false, error: { message: "Active listing not found" } });
     return;
   }
+  await claimTx(txHash, "bid-placed", wallet);
 
+  // Record what was actually escrowed, not what the client says it bid.
+  const amount = formatEther(parsed.args.amount as bigint);
   const onChainBids = await readBids(batchId);
   const activeBid = onChainBids.filter((b: { active: boolean }) => b.active).pop();
 
@@ -60,6 +63,7 @@ export async function acceptBid(req: AuthRequest, res: Response): Promise<void> 
     res.status(400).json({ success: false, error: { message: "BidAccepted event not found" } });
     return;
   }
+  await claimTx(txHash, "bid-accepted", wallet);
 
   const dealer = (parsed.args.dealer as string).toLowerCase();
   const amount = (parsed.args.amount as bigint).toString();

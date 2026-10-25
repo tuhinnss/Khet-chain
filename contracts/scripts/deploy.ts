@@ -18,11 +18,14 @@ async function main() {
   const address = await contract.getAddress();
   console.log(">>> KhetChain successfully deployed to:", address);
 
+  const registrar = await grantRegistrar(address, deployer.address);
+
   const deployment = {
     address,
     network: network.name,
     chainId: Number(network.chainId),
     deployer: deployer.address,
+    registrar,
     deployedAt: new Date().toISOString(),
   };
 
@@ -55,6 +58,39 @@ async function main() {
   console.log(`Set VITE_CONTRACT_ADDRESS=${address} in frontend/.env`);
   console.log(`Set KHETCHAIN_CONTRACT_ADDRESS=${address} in backend/.env / root .env`);
   console.log("==========================================");
+}
+
+/**
+ * The backend relayer only needs to grant/revoke actor roles, so it gets
+ * REGISTRAR_ROLE rather than running with the deployer's full admin key.
+ * Address comes from REGISTRAR_ADDRESS, else is derived from RELAYER_PRIVATE_KEY.
+ */
+async function grantRegistrar(contractAddress: string, deployerAddress: string): Promise<string | null> {
+  let relayer = process.env.REGISTRAR_ADDRESS || "";
+  if (!relayer && process.env.RELAYER_PRIVATE_KEY) {
+    try {
+      relayer = new ethers.Wallet(process.env.RELAYER_PRIVATE_KEY).address;
+    } catch {
+      console.warn("RELAYER_PRIVATE_KEY is not a valid key; skipping REGISTRAR_ROLE grant.");
+    }
+  }
+
+  if (!relayer) {
+    console.warn("No relayer configured. Grant REGISTRAR_ROLE to your backend relayer before approving users.");
+    return null;
+  }
+  if (relayer.toLowerCase() === deployerAddress.toLowerCase()) {
+    console.warn(
+      "WARNING: the relayer is the deployer, so the backend holds full admin rights. " +
+        "Use a separate RELAYER_PRIVATE_KEY (it only needs REGISTRAR_ROLE and some gas)."
+    );
+    return relayer;
+  }
+
+  const contract = await ethers.getContractAt("KhetChain", contractAddress);
+  await (await contract.grantRole(await contract.REGISTRAR_ROLE(), relayer)).wait();
+  console.log("Granted REGISTRAR_ROLE to relayer:", relayer);
+  return relayer;
 }
 
 main().catch((error) => {

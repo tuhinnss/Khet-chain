@@ -15,6 +15,24 @@ export const BATCH_STATUS_LABELS: Record<string, string> = {
   Completed: "Consumed / Verified",
 };
 
+export function dashboardPathFor(role: string): string {
+  switch (role) {
+    case "farmer":
+      return "/farmer";
+    case "distributor":
+    case "dealer":
+      return "/distributor";
+    case "wholesaler":
+      return "/wholesaler";
+    case "retailer":
+      return "/retailer";
+    case "admin":
+      return "/admin";
+    default:
+      return "/";
+  }
+}
+
 export const ROLE_LABELS: Record<string, string> = {
   farmer: "Farmer / Producer",
   distributor: "Distributor / Trader",

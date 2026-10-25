@@ -1,17 +1,57 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { parseEther } from "ethers";
+import { isAxiosError } from "axios";
+import { Contract, ContractTransactionReceipt, parseEther } from "ethers";
 import { getDashboardStats, syncBatch, listBatches } from "../api/batch.api";
 import { createListing } from "../api/listing.api";
 import { getBids, acceptBid } from "../api/bid.api";
+import { getBatchQR } from "../api/qr.api";
 import { useAuth } from "../context/AuthContext";
-import { connectWallet, computeQrHash, getContract, ensureSepoliaNetwork } from "../hooks/useWallet";
+import { connectWallet, getContract, ensureSepoliaNetwork } from "../hooks/useWallet";
 import { syncRole, getRoleStatus } from "../api/auth.api";
 import StatusBadge from "../components/common/StatusBadge";
 import TransactionBadge from "../components/common/TransactionBadge";
 import QRGenerator from "../components/qr/QRGenerator";
 import { Batch } from "../types";
 import { getErrorMessage } from "../utils/errors";
+import { createQrSecret } from "../utils/qr";
+
+// A registered batch whose QR secret hasn't reached the server yet. Kept in
+// localStorage because until the sync succeeds it is the only copy of the secret.
+type PendingSync = {
+  txHash: string;
+  cropName: string;
+  qrSecret: string;
+  [field: string]: unknown;
+};
+
+function readPendingSyncs(key: string): PendingSync[] {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writePendingSyncs(key: string, items: PendingSync[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(items));
+  } catch {
+    // storage unavailable; the in-memory copy still allows a retry this session
+  }
+}
+
+function batchIdFromReceipt(contract: Contract, receipt: ContractTransactionReceipt): number | null {
+  for (const log of receipt.logs) {
+    try {
+      const parsed = contract.interface.parseLog(log);
+      if (parsed?.name === "BatchCreated") return Number(parsed.args.batchId);
+    } catch {
+      // not a KhetChain event
+    }
+  }
+  return null;
+}
 
 export default function FarmerDashboard() {
   const { user } = useAuth();
@@ -31,8 +71,9 @@ export default function FarmerDashboard() {
   const [bids, setBids] = useState<Record<number, { onChainBids: { index: number; dealer: string; amount: string; active: boolean }[] }>>({});
   const [msg, setMsg] = useState("");
   const [latestTxHash, setLatestTxHash] = useState("");
-  const [latestBatchId, setLatestBatchId] = useState<number | null>(null);
-  const [selectedBatchForQR, setSelectedBatchForQR] = useState<Batch | null>(null);
+  const [qrLabel, setQrLabel] = useState<{ batchId: number; cropName: string; url: string } | null>(null);
+  const pendingKey = `khetchain_pending_batch_syncs:${user?.walletAddress ?? ""}`;
+  const [pendingSyncs, setPendingSyncs] = useState<PendingSync[]>(() => readPendingSyncs(pendingKey));
   const [loading, setLoading] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState("");
 
@@ -59,6 +100,39 @@ export default function FarmerDashboard() {
     }
   }
 
+  function storePendingSyncs(items: PendingSync[]) {
+    writePendingSyncs(pendingKey, items);
+    setPendingSyncs(items);
+  }
+
+  async function syncRegisteredBatch(payload: PendingSync): Promise<boolean> {
+    try {
+      const batch = await syncBatch(payload);
+      setBatches((prev) => [batch, ...prev.filter((b) => b.batchId !== batch.batchId)]);
+      if (batch.qrUrl) setQrLabel({ batchId: batch.batchId, cropName: batch.cropName, url: batch.qrUrl });
+    } catch (err) {
+      // 409 means an earlier attempt already saved it (e.g. its response was lost).
+      if (!(isAxiosError(err) && err.response?.status === 409)) {
+        setMsg(
+          `Batch is on-chain, but saving its QR secret failed: ${getErrorMessage(err)}. ` +
+            "Use Retry sync below; until then it has no printable authenticity label."
+        );
+        return false;
+      }
+    }
+    storePendingSyncs(readPendingSyncs(pendingKey).filter((p) => p.txHash !== payload.txHash));
+    return true;
+  }
+
+  async function showLabel(b: Batch) {
+    try {
+      const { url } = await getBatchQR(b.batchId);
+      setQrLabel({ batchId: b.batchId, cropName: b.cropName, url });
+    } catch (err) {
+      setMsg(`Loading QR label failed: ${getErrorMessage(err)}`);
+    }
+  }
+
   async function registerBatch(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -68,9 +142,8 @@ export default function FarmerDashboard() {
     try {
       await verifyWallet();
       const contract = await getContract();
-      const counter = await contract.batchCounter();
-      const nextId = Number(counter) + 1;
-      const qrHash = computeQrHash(nextId, form.cropName, user?.walletAddress || connectedWallet);
+      // Only the hash goes on-chain; the secret is printed in the package's QR label.
+      const { secret, qrHash } = createQrSecret();
 
       // On-Chain Transaction on Ethereum Sepolia
       const tx = await contract["registerBatch(string,uint256,string,uint256,string,string,string,uint256,bytes32)"](
@@ -85,14 +158,8 @@ export default function FarmerDashboard() {
         qrHash
       );
 
-      setMsg("Transaction submitted to Ethereum Sepolia! Waiting for block confirmation...");
-      const receipt = await tx.wait();
-      setLatestTxHash(receipt.hash);
-      setLatestBatchId(nextId);
-
-      // Save/Sync to backend
-      const batch = await syncBatch({
-        txHash: receipt.hash,
+      const payload: PendingSync = {
+        txHash: tx.hash,
         cropName: form.cropName,
         quantity: Number(form.quantity),
         unit: form.unit,
@@ -101,14 +168,19 @@ export default function FarmerDashboard() {
         certification: form.certification,
         description: form.description,
         currentPrice: form.initialPrice,
-      }).catch(() => null);
+        qrSecret: secret,
+      };
+      // Persist before waiting: losing the secret means the batch can never get a label.
+      storePendingSyncs([...readPendingSyncs(pendingKey), payload]);
 
-      if (batch) {
-        setBatches((prev) => [batch, ...prev]);
-        setSelectedBatchForQR(batch);
+      setMsg("Transaction submitted to Ethereum Sepolia! Waiting for block confirmation...");
+      const receipt = await tx.wait();
+      setLatestTxHash(receipt.hash);
+      const batchId = batchIdFromReceipt(contract, receipt);
+
+      if (await syncRegisteredBatch(payload)) {
+        setMsg(`Batch #${batchId ?? "?"} successfully registered on Ethereum Sepolia blockchain!`);
       }
-
-      setMsg(`Batch #${nextId} successfully registered on Ethereum Sepolia blockchain!`);
     } catch (err) {
       console.error(err);
       setMsg(getErrorMessage(err, "Registration failed on blockchain"));
@@ -213,25 +285,46 @@ export default function FarmerDashboard() {
         </div>
       </section>
 
-      {/* QR Modal / Callout if a batch was just created or selected */}
-      {(selectedBatchForQR || latestBatchId) && (
+      {pendingSyncs.length > 0 && (
+        <section className="card">
+          <h3>⚠️ Batches awaiting server sync</h3>
+          <p className="muted">
+            Registered on-chain, but their QR secret hasn't reached the server yet. Until it does they have no
+            printable authenticity label. Keep this browser's data until the sync succeeds.
+          </p>
+          {pendingSyncs.map((p) => (
+            <div key={p.txHash} className="inline-form">
+              <span>
+                {p.cropName} · tx <code>{p.txHash.slice(0, 10)}…</code>
+              </span>
+              <button
+                type="button"
+                className="btn-secondary-sm"
+                disabled={loading}
+                onClick={async () => {
+                  if (await syncRegisteredBatch(p)) setMsg(`${p.cropName} synced; its QR label is ready.`);
+                }}
+              >
+                Retry sync
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* QR label for a batch that was just created or selected */}
+      {qrLabel && (
         <section className="card qr-highlight-card">
           <div className="qr-highlight-header">
-            <h3>📱 Batch QR Code Generated</h3>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedBatchForQR(null);
-                setLatestBatchId(null);
-              }}
-              className="btn-ghost-sm"
-            >
+            <h3>📱 Batch QR Label</h3>
+            <button type="button" onClick={() => setQrLabel(null)} className="btn-ghost-sm">
               ✕ Close
             </button>
           </div>
           <QRGenerator
-            batchId={selectedBatchForQR?.batchId || latestBatchId || 1}
-            cropName={selectedBatchForQR?.cropName || form.cropName}
+            batchId={qrLabel.batchId}
+            cropName={qrLabel.cropName}
+            url={qrLabel.url}
             showDetails={true}
           />
         </section>
@@ -360,7 +453,7 @@ export default function FarmerDashboard() {
                 <div className="batch-card-actions">
                   <button
                     type="button"
-                    onClick={() => setSelectedBatchForQR(b)}
+                    onClick={() => showLabel(b)}
                     className="btn-secondary-sm"
                   >
                     📱 QR Code

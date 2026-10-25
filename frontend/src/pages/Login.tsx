@@ -4,6 +4,7 @@ import { getNonce, login } from "../api/auth.api";
 import { useAuth } from "../context/AuthContext";
 import { connectWallet, signMessage, ensureSepoliaNetwork } from "../hooks/useWallet";
 import { getErrorMessage } from "../utils/errors";
+import { dashboardPathFor } from "../utils/constants";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -24,12 +25,7 @@ export default function Login() {
       const signature = await signMessage(message);
       const { token, user } = await login({ email, password, walletAddress, signature, message });
       setSession(token, user);
-
-      if (user.role === "farmer") navigate("/farmer");
-      else if (user.role === "distributor" || user.role === "dealer") navigate("/distributor");
-      else if (user.role === "wholesaler") navigate("/wholesaler");
-      else if (user.role === "retailer") navigate("/retailer");
-      else navigate("/");
+      navigate(dashboardPathFor(user.role));
     } catch (err) {
       setError(getErrorMessage(err, "Login failed"));
     } finally {

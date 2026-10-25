@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import { AuthRequest, SupplyChainEventData } from "../types/index.js";
 import { Batch } from "../models/Batch.js";
 import { SupplyChainEvent } from "../models/SupplyChainEvent.js";
-import { generateQRCode, buildVerificationUrl } from "../services/qr.service.js";
-import { parseEvent, verifyTxFromWallet } from "../services/tx.service.js";
+import { buildVerificationUrl, isQrSecret, secretMatchesHash } from "../services/qr.service.js";
+import { claimTx, parseEvent, verifyTxFromWallet } from "../services/tx.service.js";
 import { readBatch, readBatchHistory, readSupplyChainEvents } from "../services/blockchain.service.js";
 
 export async function syncBatch(req: AuthRequest, res: Response): Promise<void> {
@@ -18,7 +18,9 @@ export async function syncBatch(req: AuthRequest, res: Response): Promise<void> 
     description,
     currentPrice,
     batchStringId,
+    qrSecret,
   } = req.body as {
+    qrSecret: string;
     txHash: string;
     cropName: string;
     quantity: number;
@@ -39,10 +41,15 @@ export async function syncBatch(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
-  const batchId = Number(parsed.args.batchId);
   const qrHash = parsed.args.qrHash as string;
+  if (!isQrSecret(qrSecret) || !secretMatchesHash(qrSecret, qrHash)) {
+    res.status(400).json({ success: false, error: { message: "qrSecret does not match the batch's on-chain QR hash" } });
+    return;
+  }
+  await claimTx(txHash, "batch-registered", wallet);
+
+  const batchId = Number(parsed.args.batchId);
   const strId = batchStringId || (parsed.args.batchStringId as string) || `KHC-2026-${String(batchId).padStart(6, "0")}`;
-  const qrCodeDataUrl = await generateQRCode(batchId, qrHash);
 
   const batch = await Batch.findOneAndUpdate(
     { batchId },
@@ -62,8 +69,8 @@ export async function syncBatch(req: AuthRequest, res: Response): Promise<void> 
       currentPrice: currentPrice || "0",
       status: "Created",
       qrHash,
-      qrCodeDataUrl,
-      verificationUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/trace/${batchId}`,
+      qrSecret,
+      verificationUrl: buildVerificationUrl(batchId),
       txHashes: { registered: txHash },
     },
     { upsert: true, new: true }
@@ -90,7 +97,11 @@ export async function syncBatch(req: AuthRequest, res: Response): Promise<void> 
     { upsert: true }
   );
 
-  res.status(201).json({ success: true, data: batch });
+  // qrUrl carries the secret; only the registering farmer receives it here.
+  res.status(201).json({
+    success: true,
+    data: { ...batch.toObject(), qrUrl: buildVerificationUrl(batchId, qrSecret) },
+  });
 }
 
 export async function listBatches(req: AuthRequest, res: Response): Promise<void> {
@@ -160,7 +171,8 @@ export async function getHistory(req: Request, res: Response): Promise<void> {
 
 export async function verifyBatch(req: Request, res: Response): Promise<void> {
   const batchId = Number(req.params.id || req.params.batchId);
-  const { hash } = req.query as { hash?: string };
+  // `s` is the secret from the scanned QR label.
+  const { s: secret } = req.query as { s?: string };
 
   const dbBatch = await Batch.findOne({ batchId });
   let onChain;
@@ -177,20 +189,19 @@ export async function verifyBatch(req: Request, res: Response): Promise<void> {
 
   const cachedEvents = await SupplyChainEvent.find({ batchId }).sort({ timestamp: 1 });
 
-  const scannedHash = hash || dbBatch?.qrHash || onChain?.qrHash || "";
-  const authentic = !!(onChain && scannedHash === onChain.qrHash && onChain.qrHash !== ethersZero());
+  // Authentic only if the caller presents the label's secret and it hashes to the
+  // on-chain qrHash. `checked: false` means no label was scanned, not a failure.
+  const checked = typeof secret === "string" && secret.length > 0;
+  const authentic = !!(onChain && checked && secretMatchesHash(secret, onChain.qrHash));
 
   res.json({
     success: true,
     data: {
       authentic,
+      checked,
       batch: { ...dbBatch?.toObject(), onChain },
       history: chainHistory,
       supplyChainEvents: supplyChainEvents.length > 0 ? supplyChainEvents : cachedEvents,
     },
   });
-}
-
-function ethersZero(): string {
-  return "0x0000000000000000000000000000000000000000000000000000000000000000";
 }

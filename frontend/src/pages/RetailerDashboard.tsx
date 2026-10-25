@@ -11,11 +11,14 @@ import StatusBadge from "../components/common/StatusBadge";
 import TransactionBadge from "../components/common/TransactionBadge";
 import { Batch, SupplyChainEvent } from "../types";
 import { getErrorMessage } from "../utils/errors";
+import { getBatchQR } from "../api/qr.api";
+import { parseQrPayload } from "../utils/qr";
 
 export default function RetailerDashboard() {
   const { user } = useAuth();
   const [batchId, setBatchId] = useState("");
   const [batch, setBatch] = useState<Batch | null>(null);
+  const [labelUrl, setLabelUrl] = useState<string | undefined>();
   const [events, setEvents] = useState<SupplyChainEvent[]>([]);
   const [msg, setMsg] = useState("");
   const [latestTxHash, setLatestTxHash] = useState("");
@@ -38,6 +41,8 @@ export default function RetailerDashboard() {
     try {
       const b = await getBatch(id);
       setBatch(b);
+      // The printable label is only issued to the batch's custodian; others get a share link.
+      setLabelUrl(await getBatchQR(id).then((d) => d.url).catch(() => undefined));
       const h = await getHistory(id).catch(() => ({ supplyChainEvents: [] }));
       setEvents(h.supplyChainEvents || b.supplyChainEvents || []);
       setMsg(`Loaded Batch #${id} (${b.cropName})`);
@@ -49,17 +54,10 @@ export default function RetailerDashboard() {
   }
 
   function handleScan(data: string) {
-    try {
-      const parsed = JSON.parse(data);
-      setBatchId(String(parsed.batchId));
-      loadBatch(parsed.batchId);
-    } catch {
-      const match = data.match(/(\d+)/);
-      if (match) {
-        setBatchId(match[1]);
-        loadBatch(Number(match[1]));
-      }
-    }
+    const scanned = parseQrPayload(data);
+    if (!scanned) return;
+    setBatchId(String(scanned.batchId));
+    loadBatch(scanned.batchId);
   }
 
   async function markRetailReady(e: React.FormEvent) {
@@ -201,6 +199,7 @@ export default function RetailerDashboard() {
               batchId={batch.batchId}
               batchStringId={batch.batchStringId}
               cropName={batch.cropName}
+              url={labelUrl}
               showDetails={true}
             />
           </section>

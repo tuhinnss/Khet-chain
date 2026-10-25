@@ -1,13 +1,13 @@
 import { Response } from "express";
+import { formatEther } from "ethers";
 import { AuthRequest } from "../types/index.js";
 import { Listing } from "../models/Listing.js";
 import { Batch } from "../models/Batch.js";
-import { parseEvent, verifyTxFromWallet } from "../services/tx.service.js";
+import { claimTx, parseEvent, verifyTxFromWallet } from "../services/tx.service.js";
 
 export async function createListing(req: AuthRequest, res: Response): Promise<void> {
-  const { batchId, askingPrice, minBid, expiresAt, txHash } = req.body as {
+  const { batchId, minBid, expiresAt, txHash } = req.body as {
     batchId: number;
-    askingPrice: string;
     minBid?: string;
     expiresAt?: string;
     txHash: string;
@@ -26,7 +26,9 @@ export async function createListing(req: AuthRequest, res: Response): Promise<vo
     res.status(404).json({ success: false, error: { message: "Batch not found" } });
     return;
   }
+  await claimTx(txHash, "listing-created", wallet);
 
+  const askingPrice = formatEther(parsed.args.price as bigint);
   await Batch.updateOne(
     { batchId },
     { status: "Listed", currentPrice: askingPrice, "txHashes.listed": txHash }

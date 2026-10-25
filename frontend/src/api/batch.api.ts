@@ -21,8 +21,9 @@ export async function getHistory(id: number) {
   return data.data;
 }
 
-export async function verifyBatch(id: number, hash?: string) {
-  const { data } = await api.get(`/batch/${id}/verify`, { params: { hash } });
+/** `secret` is the `s` value from a scanned QR label; without it nothing is verified. */
+export async function verifyBatch(id: number, secret?: string) {
+  const { data } = await api.get(`/batch/${id}/verify`, { params: { s: secret } });
   return data.data;
 }
 

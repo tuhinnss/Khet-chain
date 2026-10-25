@@ -12,6 +12,7 @@ import RetailerDashboard from "./pages/RetailerDashboard";
 import Marketplace from "./pages/Marketplace";
 import BatchDetails from "./pages/BatchDetails";
 import BidManagement from "./pages/BidManagement";
+import AdminDashboard from "./pages/AdminDashboard";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
@@ -82,6 +83,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={["farmer"]}>
                   <BidManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute roles={["admin"]}>
+                  <AdminDashboard />
                 </ProtectedRoute>
               }
             />

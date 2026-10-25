@@ -17,6 +17,7 @@ export interface IBatch extends Document {
   currentPrice: string;
   status: BatchStatus;
   qrHash: string;
+  qrSecret?: string;
   qrCodeDataUrl?: string;
   verificationUrl: string;
   txHashes: Record<string, string>;
@@ -43,7 +44,11 @@ const batchSchema = new Schema<IBatch>(
       default: "Created",
     },
     qrHash: { type: String, required: true },
-    qrCodeDataUrl: String,
+    // Preimage of qrHash, printed only inside the package's QR label. Scanning it
+    // is what proves authenticity, so it must never appear in public responses.
+    qrSecret: { type: String, select: false },
+    // Legacy: older records stored a rendered QR here; hidden for the same reason.
+    qrCodeDataUrl: { type: String, select: false },
     verificationUrl: { type: String, required: true },
     txHashes: { type: Schema.Types.Mixed, default: {} },
   },

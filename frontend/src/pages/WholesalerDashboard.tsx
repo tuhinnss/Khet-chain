@@ -10,6 +10,7 @@ import QRScanner from "../components/qr/QRScanner";
 import TransactionBadge from "../components/common/TransactionBadge";
 import { Batch, SupplyChainEvent } from "../types";
 import { getErrorMessage } from "../utils/errors";
+import { parseQrPayload } from "../utils/qr";
 
 export default function WholesalerDashboard() {
   const { user } = useAuth();
@@ -58,17 +59,10 @@ export default function WholesalerDashboard() {
   }
 
   function handleQRScan(data: string) {
-    try {
-      const parsed = JSON.parse(data);
-      setBatchId(String(parsed.batchId));
-      loadBatchDetails(parsed.batchId);
-    } catch {
-      const match = data.match(/(\d+)/);
-      if (match) {
-        setBatchId(match[1]);
-        loadBatchDetails(Number(match[1]));
-      }
-    }
+    const scanned = parseQrPayload(data);
+    if (!scanned) return;
+    setBatchId(String(scanned.batchId));
+    loadBatchDetails(scanned.batchId);
   }
 
   async function submitWholesaleEvent(e: React.FormEvent) {

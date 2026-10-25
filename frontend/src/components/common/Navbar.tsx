@@ -1,27 +1,13 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import WalletButton from "./WalletButton";
+import { dashboardPathFor } from "../../utils/constants";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const getDashboardPath = () => {
-    if (!user) return "/login";
-    switch (user.role) {
-      case "farmer":
-        return "/farmer";
-      case "distributor":
-      case "dealer":
-        return "/distributor";
-      case "wholesaler":
-        return "/wholesaler";
-      case "retailer":
-        return "/retailer";
-      default:
-        return "/";
-    }
-  };
+  const getDashboardPath = () => (user ? dashboardPathFor(user.role) : "/login");
 
   return (
     <nav className="navbar">

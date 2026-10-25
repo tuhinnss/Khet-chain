@@ -1,31 +1,58 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { getBatch, getHistory } from "../api/batch.api";
+import { useParams, useSearchParams, Link } from "react-router-dom";
+import { getBatch, getHistory, verifyBatch } from "../api/batch.api";
 import { getContractReadOnly } from "../hooks/useWallet";
 import { Batch, SupplyChainEvent } from "../types";
 import { CONTRACT_ADDRESS, EXPLORER_URL } from "../utils/constants";
+import { secretMatchesHash } from "../utils/qr";
 import ProvenanceTimeline from "../components/batch/ProvenanceTimeline";
 import StatusBadge, { QualityBadge } from "../components/common/StatusBadge";
 import TransactionBadge from "../components/common/TransactionBadge";
 import QRGenerator from "../components/qr/QRGenerator";
 
+type Authenticity = "checking" | "verified" | "mismatch" | "unchecked" | "unavailable" | "demo";
+
+/** Checks the scanned label secret against the batch's on-chain qrHash. */
+async function checkAuthenticity(id: number, secret: string): Promise<Authenticity> {
+  const result = await verifyBatch(id, secret).catch(() => null);
+  if (result?.batch?.onChain) return result.authentic ? "verified" : "mismatch";
+  // Backend (or its RPC) unavailable: compare against the chain directly.
+  try {
+    const onChain = await getContractReadOnly().getBatch(id);
+    return secretMatchesHash(secret, onChain.qrHash) ? "verified" : "mismatch";
+  } catch {
+    return "unavailable";
+  }
+}
+
 export default function TracePage() {
   const { batchId: rawId } = useParams();
   const batchId = Number(rawId || 1);
+  const [search] = useSearchParams();
+  const secret = search.get("s") || undefined;
+  const isDemo = search.get("demo") === "1";
 
   const [batch, setBatch] = useState<Batch | null>(null);
   const [events, setEvents] = useState<SupplyChainEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showQR, setShowQR] = useState(false);
+  const [authenticity, setAuthenticity] = useState<Authenticity>("checking");
 
   useEffect(() => {
     loadTraceData(batchId);
-  }, [batchId]);
+  }, [batchId, secret, isDemo]);
 
   async function loadTraceData(id: number) {
     setLoading(true);
     setError("");
+    setAuthenticity("checking");
+    if (isDemo) {
+      loadDemoData(id);
+      setAuthenticity("demo");
+      setLoading(false);
+      return;
+    }
     try {
       // 1. Try fetching from Backend API
       const apiResult = await getBatch(id).catch(() => null);
@@ -93,10 +120,33 @@ export default function TracePage() {
       }
     } catch (err) {
       console.warn("Error loading batch from blockchain/API, checking demo fallback:", err);
-      // Fallback demo data for immediate verification showcase
-      loadDemoData(id);
+      // No placeholder provenance here: on a verification page it would make an
+      // invented batch ID look genuine. Sample data is opt-in via ?demo=1.
+      setBatch(null);
+      setEvents([]);
     } finally {
       setLoading(false);
+    }
+    setAuthenticity(secret ? await checkAuthenticity(id, secret) : "unchecked");
+  }
+
+  function authenticityBanner(): { className: string; text: string } {
+    switch (authenticity) {
+      case "verified":
+        return { className: "alert success", text: `✓ Authentic: this QR label matches batch #${batchId}'s on-chain record.` };
+      case "mismatch":
+        return {
+          className: "alert error",
+          text: `✗ This QR label does not match batch #${batchId}'s on-chain record. The product may be counterfeit.`,
+        };
+      case "unavailable":
+        return { className: "alert error", text: "Couldn't reach the blockchain to check this label. Try again shortly." };
+      case "demo":
+        return { className: "alert error", text: "Sample data for demonstration. This is not an on-chain record." };
+      case "checking":
+        return { className: "alert", text: "Checking the QR label against the blockchain…" };
+      default:
+        return { className: "alert", text: "Public trace view. Scan the QR label on the package to verify it is authentic." };
     }
   }
 
@@ -184,7 +234,7 @@ export default function TracePage() {
           <span className="shield-icon">🛡️</span>
           <div>
             <h1 className="trace-title">KHETCHAIN</h1>
-            <p className="trace-subtitle">Verified Authentic Farm-to-Consumer Produce</p>
+            <p className="trace-subtitle">Farm-to-Consumer Produce Traceability</p>
           </div>
         </div>
         <div className="trace-header-right">
@@ -212,6 +262,8 @@ export default function TracePage() {
         </div>
       ) : batch ? (
         <>
+          <div className={authenticityBanner().className}>{authenticityBanner().text}</div>
+
           {/* Main Produce Summary Card */}
           <section className="produce-summary-card">
             <div className="produce-header-row">
@@ -284,7 +336,9 @@ export default function TracePage() {
               <dt>Batch QR Cryptographic Hash:</dt>
               <dd>
                 <code title={batch.qrHash}>{batch.qrHash.slice(0, 16)}...{batch.qrHash.slice(-10)}</code>
-                <span className="verified-badge-inline">✓ Cryptographically Verified</span>
+                {authenticity === "verified" && (
+                  <span className="verified-badge-inline">✓ Matches scanned label</span>
+                )}
               </dd>
 
               <dt>Current Custodian Wallet:</dt>

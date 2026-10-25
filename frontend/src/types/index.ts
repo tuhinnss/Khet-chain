@@ -15,7 +15,10 @@ export interface User {
   walletAddress: string;
   businessName?: string;
   location?: string;
+  approvalStatus?: ApprovalStatus;
 }
+
+export type ApprovalStatus = "pending" | "approved" | "rejected";
 
 export type BatchStatus =
   | "Created"
@@ -58,8 +61,9 @@ export interface Batch {
   currentPrice?: string;
   status: BatchStatus;
   qrHash: string;
-  qrCodeDataUrl?: string;
   verificationUrl?: string;
+  /** Authenticity label URL (contains the QR secret); only returned to the registering farmer. */
+  qrUrl?: string;
   supplyChainEvents?: SupplyChainEvent[];
   history?: SupplyChainEvent[];
 }

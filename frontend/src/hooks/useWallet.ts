@@ -117,11 +117,6 @@ export async function hasRole(role: string, address: string): Promise<boolean> {
   }
 }
 
-export function computeQrHash(batchId: number, cropName: string, farmerAddress: string): string {
-  const payload = `${batchId}:${cropName}:${farmerAddress.toLowerCase()}`;
-  return ethers.keccak256(ethers.toUtf8Bytes(payload));
-}
-
 export const STATUS_ENUM: Record<string, number> = {
   Created: 0,
   Listed: 1,

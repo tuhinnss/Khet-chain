@@ -5,25 +5,27 @@ import ProvenanceTimeline from "../components/batch/ProvenanceTimeline";
 import StatusBadge from "../components/common/StatusBadge";
 import QRScanner from "../components/qr/QRScanner";
 import { ProvenanceRecord, Batch } from "../types";
+import { parseQrPayload } from "../utils/qr";
 
 export default function ConsumerVerify() {
   const { batchId: paramId } = useParams();
   const [search] = useSearchParams();
   const [data, setData] = useState<{
     authentic: boolean;
+    checked: boolean;
     batch: Batch & { onChain?: Batch };
     history: ProvenanceRecord[];
   } | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (paramId) load(Number(paramId), search.get("hash") ?? undefined);
+    if (paramId) load(Number(paramId), search.get("s") ?? undefined);
   }, [paramId, search]);
 
-  async function load(id: number, hash?: string) {
+  async function load(id: number, secret?: string) {
     setError("");
     try {
-      const result = await verifyBatch(id, hash);
+      const result = await verifyBatch(id, secret);
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");
@@ -31,13 +33,8 @@ export default function ConsumerVerify() {
   }
 
   function handleScan(raw: string) {
-    try {
-      const parsed = JSON.parse(raw);
-      load(parsed.batchId, parsed.hash);
-    } catch {
-      const match = raw.match(/(\d+)/);
-      if (match) load(Number(match[1]));
-    }
+    const scanned = parseQrPayload(raw);
+    if (scanned) load(scanned.batchId, scanned.secret);
   }
 
   const batch = data?.batch?.onChain ?? data?.batch;
@@ -59,7 +56,11 @@ export default function ConsumerVerify() {
       {data && batch && (
         <section className="card verify-result">
           <div className={`authenticity ${data.authentic ? "valid" : "invalid"}`}>
-            {data.authentic ? "✓ Authentic — On-chain record verified" : "✗ Hash mismatch — Verify manually"}
+            {data.authentic
+              ? "✓ Authentic — QR label matches the on-chain record"
+              : data.checked
+                ? "✗ QR label does not match this batch — possible counterfeit"
+                : "Not verified — scan the QR label on the package"}
           </div>
           <div className="verify-details">
             <h2>{batch.cropName}</h2>
